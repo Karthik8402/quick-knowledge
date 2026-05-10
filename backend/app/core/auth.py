@@ -74,7 +74,7 @@ def _cache_expiry_for_token(token: str) -> float:
         return now + 60
 
     exp = payload.get("exp")
-    if isinstance(exp, (int, float)):
+    if isinstance(exp, int | float):
         return min(float(exp) - _TOKEN_CACHE_SKEW_SECONDS, now + _TOKEN_CACHE_MAX_SECONDS)
     return now + 60
 
