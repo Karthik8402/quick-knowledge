@@ -15,6 +15,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "20"
@@ -347,16 +351,20 @@ jobs:
       url: https://intelligent-knowledge.onrender.com
 
     steps:
+      - name: Validate Render deploy secret
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "Missing RENDER_DEPLOY_HOOK_URL secret" && exit 1
+          fi
+
       - name: Trigger Render deploy hook
         run: |
           curl -sf \
             -X POST \
             "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
-          || echo "⚠️  Render deploy hook not configured — skipping."
-        continue-on-error: true
+          || exit 1
 
       - name: Wait for Render health check
-        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
         run: |
           echo "Waiting 90s for Render to deploy..."
           sleep 90
@@ -368,7 +376,6 @@ jobs:
             sleep 10
           done
           echo "❌ Health check timed out" && exit 1
-        continue-on-error: true
 
   # ─────────────────────────────────────────────────
   # JOB 5 — Deploy Frontend to Vercel (main only)
@@ -381,6 +388,9 @@ jobs:
     environment:
       name: production
       url: https://intelligent-knowledge.vercel.app
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
       - uses: actions/checkout@v4
@@ -394,15 +404,20 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Deploy to Vercel
+      - name: Validate Vercel secrets
         run: |
-          vercel deploy \
-            --token=${{ secrets.VERCEL_TOKEN }} \
-            --prod \
-            --yes \
-            --cwd ./frontend \
-            2>&1 | tail -5
-        continue-on-error: true
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ secrets.VERCEL_ORG_ID }}" ] || [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
+            echo "Missing Vercel secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID" && exit 1
+          fi
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} --cwd ./frontend
+
+      - name: Build with Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }} --cwd ./frontend
+
+      - name: Deploy prebuilt to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} --cwd ./frontend
 
   # ─────────────────────────────────────────────────
   # JOB 6 — Final pipeline status summary

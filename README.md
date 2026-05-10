@@ -265,6 +265,42 @@ Run migrations in `supabase/migrations/` to set up tables and extensions.
 
 ---
 
+## CI/CD Pipeline
+
+This project includes a comprehensive GitHub Actions CI/CD pipeline that automatically runs on every push and pull request:
+
+### Quality Gates (CI)
+- **Backend** — Linting (Ruff), Type Checking (MyPy), Security Scanning (Bandit), Unit Tests (Pytest)
+- **Frontend** — Linting (ESLint), Type Checking (TypeScript), Unit Tests (Vitest)
+- **Smoke Tests** — API health and endpoint validation
+
+### Deployment (CD)
+- **Frontend** — Automatically deployed to Vercel on `main` branch pushes
+- **Backend** — Automatically deployed to Render on `main` branch pushes
+
+### Pipeline Configuration
+
+The pipeline is defined in `.github/workflows/ci-cd.yml` with the following jobs:
+
+1. **Backend Quality Gates** — Lint, Type Check, Tests, Security Scan
+2. **Frontend Quality Gates** — Lint, Tests, Build
+3. **Smoke Tests** — API endpoint validation
+4. **Deployments** — Vercel (frontend) and Render (backend) deployments
+
+### Environment Variables
+
+For deployments to work properly, you need to set the following secrets in your GitHub repository:
+
+- `VERCEL_TOKEN` — Vercel access token for programmatic deployments
+- `RENDER_DEPLOY_HOOK_URL` — Render deployment hook URL for backend deployment
+- `VITE_API_BASE_URL` — The production backend URL for frontend API calls
+
+### Pipeline Status
+
+[![CI/CD Pipeline](https://github.com/your-username/intelligent-knowledge/actions/workflows/ci-cd.yml/badge/CI-CD%20Pipeline)](https://github.com/your-username/intelligent-knowledge/actions/workflows/ci-cd.yml)
+
+---
+
 ## Testing
 
 ### Backend
