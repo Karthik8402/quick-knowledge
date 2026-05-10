@@ -195,4 +195,5 @@ async def root() -> dict[str, str]:
         "message": "Intelligent Knowledge Base API is running",
     }
 
+
 app.include_router(api_router)
