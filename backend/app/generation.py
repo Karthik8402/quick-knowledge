@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
+
+from pydantic import SecretStr
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -8,15 +10,22 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-try:
-    from langchain_nvidia_ai_endpoints import ChatNVIDIA
-except ImportError:
-    ChatNVIDIA = None
+ChatNVIDIA: Any
+ChatGroq: Any
 
 try:
-    from langchain_groq import ChatGroq
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA as _ChatNVIDIA
+except ImportError:
+    ChatNVIDIA = None
+else:
+    ChatNVIDIA = _ChatNVIDIA
+
+try:
+    from langchain_groq import ChatGroq as _ChatGroq
 except ImportError:
     ChatGroq = None
+else:
+    ChatGroq = _ChatGroq
 
 from .config import get_settings
 
@@ -33,14 +42,16 @@ def get_embeddings() -> Embeddings:
         model_name = settings.embedding_model
         if model_name in LEGACY_GOOGLE_EMBEDDING_MODELS:
             model_name = "gemini-embedding-001"
-        return GoogleGenerativeAIEmbeddings(
-            model=model_name, google_api_key=settings.google_api_key
-        )
+        embeddings_cls = cast(Any, GoogleGenerativeAIEmbeddings)
+        return embeddings_cls(model=model_name, google_api_key=settings.google_api_key)
 
     if settings.embedding_provider.lower() == "openai":
         if not settings.openai_api_key:
             raise ValueError("OPENAI_API_KEY is required for openai embeddings")
-        return OpenAIEmbeddings(model=settings.embedding_model, api_key=settings.openai_api_key)
+        return OpenAIEmbeddings(
+            model=settings.embedding_model,
+            api_key=SecretStr(settings.openai_api_key),
+        )
 
     from langchain_huggingface import HuggingFaceEmbeddings
 

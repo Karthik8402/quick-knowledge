@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     nvidia_api_key: str = ""
     groq_api_key: str = ""
 
-    embedding_provider: str = "google"
-    embedding_model: str = "gemini-embedding-001"
+    embedding_provider: str = ""
+    embedding_model: str = ""
 
     # ── Vector Store ──
     vector_store: str = "chroma"  # "chroma" | "pgvector"
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     rate_limit: str = "10/minute"
 
     # ── CORS ──
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app/"
 
 
 @lru_cache
