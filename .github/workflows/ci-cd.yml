@@ -374,9 +374,6 @@ jobs:
     environment:
       name: production
       url: https://intelligent-knowledge.vercel.app
-    defaults:
-      run:
-        working-directory: frontend
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
