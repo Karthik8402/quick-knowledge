@@ -2,27 +2,50 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-export const authEnabled = import.meta.env.VITE_AUTH_ENABLED === 'true';
+const authEnabledEnv = import.meta.env.VITE_AUTH_ENABLED;
+export const authEnabled =
+  authEnabledEnv !== undefined
+    ? authEnabledEnv === 'true'
+    : Boolean(supabaseUrl && supabaseAnonKey);
+
+const missingConfig: string[] = [];
+if (!supabaseUrl) missingConfig.push('VITE_SUPABASE_URL');
+if (!supabaseAnonKey) missingConfig.push('VITE_SUPABASE_ANON_KEY');
+if (authEnabledEnv !== undefined && authEnabledEnv !== 'true') {
+  missingConfig.push('VITE_AUTH_ENABLED (must be "true")');
+}
 
 function createNoopSupabaseClient() {
+  const errMsg =
+    missingConfig.length > 0
+      ? `Authentication is not configured. Missing environment variables: ${missingConfig.join(', ')}`
+      : 'Authentication is not configured for this environment.';
+
   return {
     auth: {
       getSession: async () => ({ data: { session: null }, error: null }),
       onAuthStateChange: () => ({
         data: { subscription: { unsubscribe: () => undefined } },
       }),
-      signInWithPassword: async () => ({ data: null, error: new Error('Authentication is not configured') }),
-      signUp: async () => ({ data: null, error: new Error('Authentication is not configured') }),
+      exchangeCodeForSession: async () => ({ data: { session: null }, error: new Error(errMsg) }),
+      signInWithPassword: async () => ({ data: null, error: new Error(errMsg) }),
+      signUp: async () => ({ data: null, error: new Error(errMsg) }),
       signOut: async () => ({ error: null }),
-      resetPasswordForEmail: async () => ({ error: new Error('Authentication is not configured') }),
-      updateUser: async () => ({ error: new Error('Authentication is not configured') }),
+      resetPasswordForEmail: async () => ({ error: new Error(errMsg) }),
+      updateUser: async () => ({ error: new Error(errMsg) }),
     },
   };
 }
 
 export const supabase =
   authEnabled && supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: true,
+        },
+      })
     : createNoopSupabaseClient();
 
 /**

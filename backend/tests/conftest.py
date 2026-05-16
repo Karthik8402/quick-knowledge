@@ -139,6 +139,19 @@ def test_client(tmp_registry, mock_vector_store) -> TestClient:
 
 
 # ---------------------------------------------------------------------------
+# Async HTTPX client for streaming tests
+# ---------------------------------------------------------------------------
+@pytest.fixture()
+async def async_test_client():
+    """Async HTTPX client for testing async streaming endpoints."""
+    from app.main import app
+    from httpx import AsyncClient
+
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        yield client
+
+
+# ---------------------------------------------------------------------------
 # Sample documents fixture
 # ---------------------------------------------------------------------------
 @pytest.fixture()

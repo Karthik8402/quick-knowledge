@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import { Toaster } from 'react-hot-toast';
 import Layout from './core/Layout';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { authEnabled } from './lib/supabase';
 import ChatPage from './features/chat/ChatPage';
 import ChunksPage from './features/documents/ChunksPage';
 import DocumentsPage from './features/documents/DocumentsPage';
@@ -16,9 +17,10 @@ import LoginPage from './features/auth/Login';
 import RegisterPage from './features/auth/Register';
 import ForgotPasswordPage from './features/auth/ForgotPassword';
 import ResetPasswordPage from './features/auth/ResetPassword';
+import AuthCallbackPage from './features/auth/AuthCallback';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 
-const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === 'true';
+const AUTH_ENABLED = authEnabled;
 
 function DashboardRoutes() {
   const { loading } = useAuth();
@@ -70,6 +72,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/*" element={<DashboardRoutes />} />
           </Route>

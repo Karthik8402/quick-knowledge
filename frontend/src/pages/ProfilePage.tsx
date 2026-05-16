@@ -23,13 +23,13 @@ export default function ProfilePage() {
     .map((part: string) => part[0]?.toUpperCase())
     .join('') || 'U';
 
-  const { data: usageData, fetchUsage } = useUsageStore();
+  const { data: usageData, fetchUsageIfStale } = useUsageStore();
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
 
   useEffect(() => {
-    fetchUsage();
+    fetchUsageIfStale();
     listDocuments().then(setDocuments).catch(() => setDocuments([]));
-  }, [fetchUsage]);
+  }, [fetchUsageIfStale]);
 
   const totalChunks = documents.reduce((acc, doc) => acc + doc.chunks, 0);
 

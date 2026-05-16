@@ -136,9 +136,9 @@ def _get_system_prompt() -> str:
         "You are an accurate AI assistant that answers questions using ONLY the provided reference documents. "
         "Follow these rules strictly:\n"
         "1. Use the provided context to answer. Never use outside knowledge.\n"
-        "2. When citing information, naturally reference the document name and page number inline. "
-        "For example: 'According to Employee Policy Handbook (Page 8), remote work requires manager approval.'\n"
-        "3. NEVER output generic markers like 'Source 1', 'Source 2', '[Source 1]', 'Document1', etc.\n"
+        "2. Cite your sources by appending [Source N] to the end of the relevant sentence or bullet point, where N is the reference number. "
+        "For example: 'Remote work requires manager approval [Source 1].'\n"
+        "3. NEVER output the document name or page number inline in your text. Rely entirely on the [Source N] format for citations.\n"
         "4. If the answer cannot be found in the provided context, respond EXACTLY with: "
         "'Sorry, I could not find this information in your uploaded documents.'\n"
         "5. Do not invent file names, page numbers, or statistics.\n"
@@ -188,6 +188,17 @@ def _parse_llm_response(content: str) -> dict[str, Any]:
     return {"answer": content, "citation_indices": citation_indices}
 
 
+def _extract_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        )
+    return ""
+
+
 def answer_with_citations(
     question: str, retrieved_docs: list[tuple[Document, float]]
 ) -> dict[str, Any]:
@@ -204,7 +215,7 @@ def answer_with_citations(
     except Exception:
         return {"answer": FALLBACK_ANSWER, "citation_indices": []}
 
-    content = response.content if isinstance(response.content, str) else ""
+    content = _extract_text(response.content)
     return _parse_llm_response(content)
 
 
@@ -229,7 +240,7 @@ def stream_answer_with_citations(
     def token_generator():
         try:
             for chunk in llm.stream(messages):
-                token = chunk.content if isinstance(chunk.content, str) else ""
+                token = _extract_text(chunk.content)
                 if token:
                     collected.append(token)
                     yield token

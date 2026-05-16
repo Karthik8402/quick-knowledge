@@ -147,7 +147,7 @@ const suggestions = [
    Component
    ────────────────────────────────────────────── */
 export default function ChatPage() {
-  const [searchParams]                  = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const docFilter                       = searchParams.get('doc');
   const [sessions, setSessions]         = useState<ChatSession[]>(loadSessions);
   const [activeId, setActiveId]         = useState<string | null>(null);
@@ -157,6 +157,7 @@ export default function ChatPage() {
   const [isDesktop, setIsDesktop]       = useState(false);
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
   const [historyQuery, setHistoryQuery] = useState('');
+  const [newChatRequested, setNewChatRequested] = useState(false);
   const [copiedIdx, setCopiedIdx]       = useState<number | null>(null);
   const [shouldStickToBottom, setShouldStickToBottom] = useState(true);
   const [pendingSessionDelete, setPendingSessionDelete] = useState<ChatSession | null>(null);
@@ -165,7 +166,7 @@ export default function ChatPage() {
   const scrollRef   = useRef<HTMLDivElement>(null);
   const scrollPositionsRef = useRef<Record<string, number>>({});
   
-  const { data: usageData, fetchUsage, decrementRemaining } = useUsageStore();
+  const { data: usageData, fetchUsageIfStale, decrementRemaining } = useUsageStore();
 
   const activeSession = sessions.find((s) => s.id === activeId) ?? null;
   const messages = activeSession?.messages ?? [];
@@ -189,8 +190,8 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    fetchUsage();
-  }, [fetchUsage]);
+    fetchUsageIfStale();
+  }, [fetchUsageIfStale]);
 
   useEffect(() => {
     if (!isDesktop) {
@@ -199,10 +200,10 @@ export default function ChatPage() {
   }, [isDesktop]);
 
   useEffect(() => {
-    if (!activeId && sessions.length > 0) {
+    if (!activeId && sessions.length > 0 && !newChatRequested) {
       setActiveId(sessions[0].id);
     }
-  }, [activeId, sessions]);
+  }, [activeId, sessions, newChatRequested]);
 
   useEffect(() => {
     if (shouldStickToBottom) {
@@ -231,11 +232,15 @@ export default function ChatPage() {
   }, [input]);
 
   const startNewChat = useCallback(() => {
+    if (docFilter) {
+      setSearchParams({});
+    }
+    setNewChatRequested(true);
     setActiveId(null);
     setInput('');
     setHistoryOpen(false);
     setShouldStickToBottom(true);
-  }, []);
+  }, [docFilter, setSearchParams]);
 
   const updateSession = useCallback((id: string, newMessages: Message[], title?: string) => {
     setSessions((prev) => {
@@ -283,6 +288,7 @@ export default function ChatPage() {
       sessionId = newSession.id;
       setSessions((prev) => [newSession, ...prev]);
       setActiveId(sessionId);
+      setNewChatRequested(false);
       currentMessages = [];
     }
 
@@ -312,12 +318,15 @@ export default function ChatPage() {
         },
         // onDone: finalize with citations
         () => {
+          const finalAnswer = streamedText.trim().length > 0
+            ? streamedText
+            : 'Sorry, I could not find this information in your uploaded documents.';
           const finalData: ChatResponse = {
-            answer: streamedText,
+            answer: finalAnswer,
             citations: streamCitations,
             retrieved_chunks: [],
           };
-          updateSession(sessionId!, [...withUser, { role: 'assistant', text: streamedText, data: finalData }]);
+          updateSession(sessionId!, [...withUser, { role: 'assistant', text: finalAnswer, data: finalData }]);
           setLoading(false);
           decrementRemaining();
         },
@@ -474,7 +483,7 @@ export default function ChatPage() {
                   } ${historyCollapsed && isDesktop ? 'px-2 py-2' : 'px-3 py-2.5'}`}
                 >
                   <button
-                    onClick={() => { setActiveId(s.id); setHistoryOpen(false); }}
+                    onClick={() => { setActiveId(s.id); setHistoryOpen(false); setNewChatRequested(false); }}
                     className="flex-1 text-left min-w-0"
                     title={s.title}
                   >

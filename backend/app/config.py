@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     # ── LLM / Embedding ──
     llm_provider: str = "google"
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-3.1-flash-lite"
     llm_temperature: float = 0.2
     llm_top_p: float = 1.0
     llm_max_tokens: int | None = None
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     rate_limit: str = "10/minute"
 
     # ── CORS ──
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app/"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app"
 
     # ── Redis (optional caching) ──
     redis_url: str = ""

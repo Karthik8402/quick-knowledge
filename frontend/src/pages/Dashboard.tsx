@@ -14,15 +14,15 @@ export default function DashboardPage() {
 
   const profileName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
 
-  const { data: usageData, fetchUsage } = useUsageStore();
+  const { data: usageData, fetchUsageIfStale } = useUsageStore();
 
   useEffect(() => {
-    fetchUsage();
+    fetchUsageIfStale();
     Promise.all([
       listDocuments().then(setDocuments).catch(() => setDocuments([])),
       getSystemStatus().then(setStatus).catch(() => null),
     ]).finally(() => setLoading(false));
-  }, [fetchUsage]);
+  }, [fetchUsageIfStale]);
 
   const totalChunks = documents.reduce((s, d) => s + d.chunks, 0);
   const recentDocs = [...documents].sort((a, b) =>

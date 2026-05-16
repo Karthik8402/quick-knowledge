@@ -10,6 +10,7 @@ import {
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { authEnabled, supabase } from '../lib/supabase';
+import { FRONTEND_URL } from '../config/api';
 import { clearApiCache } from '../api';
 
 type AuthState = {
@@ -109,11 +110,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           Object.entries(profile).filter(([, value]) => value && value.toString().trim().length > 0)
         )
       : undefined;
+    const redirectBase = FRONTEND_URL || window.location.origin;
     const { error, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/login`,
+        emailRedirectTo: `${redirectBase}/auth/callback`,
         data: dataPayload,
       },
     });
@@ -142,8 +144,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!authEnabled) {
       throw new Error('Authentication is disabled for this environment.');
     }
+    const redirectBase = FRONTEND_URL || window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${redirectBase}/reset-password`,
     });
     if (error) throw error;
   }, []);

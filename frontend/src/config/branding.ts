@@ -19,9 +19,9 @@ export const MODEL_CONFIG: Record<string, { displayName: string; models: { id: s
   google: {
     displayName: 'Google (Gemini)',
     models: [
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-      { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
+      { id: 'gemini-3.1-flash', name: 'Gemini 3.1 Flash' },
+      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
+      { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live (Preview)' },
     ],
   },
   openai: {
@@ -50,6 +50,7 @@ export const MODEL_CONFIG: Record<string, { displayName: string; models: { id: s
 export const EMBEDDING_MODELS = [
   { id: 'text-embedding-004', name: 'Google text-embedding-004' },
   { id: 'gemini-embedding-001', name: 'Google gemini-embedding-001' },
+  { id: 'gemini-embedding-2', name: 'Google gemini-embedding-2' },
   { id: 'text-embedding-ada-002', name: 'OpenAI Ada 002' },
   { id: 'text-embedding-3-small', name: 'OpenAI Embedding 3 Small' },
 ];

@@ -4,6 +4,7 @@ import re
 import time
 from typing import Any
 
+from langchain_core.documents import Document
 from app.citations import validate_citation_indices
 from app.config import get_settings
 from app.generation import FALLBACK_ANSWER, answer_with_citations, stream_answer_with_citations
@@ -32,6 +33,35 @@ class ChatService:
         return False
 
     @staticmethod
+    def _extractive_fallback(retrieved: list[tuple[Document, float]]) -> str:
+        """Create a short extractive answer when the LLM returns the fallback."""
+        if not retrieved:
+            return FALLBACK_ANSWER
+        # Prefer the longest chunk to avoid returning only a title line.
+        best_doc = max(retrieved, key=lambda item: len(item[0].page_content or ""))[0]
+        joined = " ".join([
+            (best_doc.page_content or "").strip(),
+            *[doc.page_content.strip() for doc, _score in retrieved[1:] if doc.page_content],
+        ])
+        sentences = [s for s in re.split(r"(?<=[.!?])\s+", joined) if s]
+        summary = " ".join(sentences[:4]).strip()
+        if not summary:
+            summary = joined[:500].strip()
+        return summary or FALLBACK_ANSWER
+
+    @staticmethod
+    def _infer_document_filter(question: str, reg, owner_id: str) -> list[str] | None:
+        """Infer document filter from the question (e.g., resume/cv)."""
+        q = question.lower()
+        if not any(term in q for term in ("resume", "cv")):
+            return None
+
+        docs = reg.list_documents(owner_id=owner_id) or []
+        matched = [doc.get("document_id") for doc in docs
+                   if "resume" in (doc.get("file_name") or "").lower()]
+        return [doc_id for doc_id in matched if doc_id] or None
+
+    @staticmethod
     def build_chat_response(
         question: str,
         vector_store: Any,
@@ -51,12 +81,13 @@ class ChatService:
             )
 
         settings = get_settings()
+        inferred_doc_ids = document_ids or ChatService._infer_document_filter(question, reg, owner_id)
         retrieved = retrieve_chunks(
             vector_store=vector_store,
             question=question,
             top_k=settings.rag_top_k,
             owner_id=owner_id,
-            document_ids=document_ids,
+            document_ids=inferred_doc_ids,
         )
 
         if not retrieved:
@@ -76,6 +107,8 @@ class ChatService:
         generation = answer_with_citations(question, retrieved)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         answer_text = generation.get("answer", "") or ""
+        if answer_text == FALLBACK_ANSWER and retrieved:
+            answer_text = ChatService._extractive_fallback(retrieved)
         logger.info(
             "LLM response: status=ok duration_ms=%d chars=%d",
             elapsed_ms,
@@ -118,6 +151,8 @@ class ChatService:
                 )
 
         answer = generation.get("answer", FALLBACK_ANSWER)
+        if answer == FALLBACK_ANSWER and retrieved:
+            answer = answer_text
 
         return ChatResponse(answer=answer, citations=citations, retrieved_chunks=retrieved_chunks)
 
@@ -141,12 +176,13 @@ class ChatService:
             return
 
         settings = get_settings()
+        inferred_doc_ids = document_ids or ChatService._infer_document_filter(question, reg, owner_id)
         retrieved = retrieve_chunks(
             vector_store=vector_store,
             question=question,
             top_k=settings.rag_top_k,
             owner_id=owner_id,
-            document_ids=document_ids,
+            document_ids=inferred_doc_ids,
         )
 
         if not retrieved:
@@ -185,6 +221,16 @@ class ChatService:
             for token in result["tokens"]:
                 streamed_chars += len(token)
                 yield {"event": "token", "data": token}
+
+            if streamed_chars == 0:
+                logger.warning("LLM stream returned 0 chars; falling back to non-stream response")
+                fallback_generation = answer_with_citations(question, retrieved)
+                fallback_answer = fallback_generation.get("answer", FALLBACK_ANSWER)
+                if fallback_answer == FALLBACK_ANSWER and retrieved:
+                    fallback_answer = ChatService._extractive_fallback(retrieved)
+                yield {"event": "token", "data": fallback_answer}
+                result = fallback_generation
+                streamed_chars = len(fallback_answer)
 
             safe_indices = validate_citation_indices(
                 result.get("citation_indices", []), len(retrieved)

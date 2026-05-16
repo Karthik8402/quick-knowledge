@@ -1,10 +1,6 @@
 import { getAccessToken } from './lib/supabase';
 import type { ChatResponse, ChunksResponse, Citation, DocumentMetadata, Settings, SystemStatus, UploadResult } from './types';
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  'http://127.0.0.1:8000';
+import API_BASE_URL from './config/api';
 
 const GET_CACHE_TTL_MS = 10_000;
 const HEALTH_CACHE_TTL_MS = 5_000;
@@ -179,10 +175,31 @@ export async function chatStream(
 
   const decoder = new TextDecoder();
   let buffer = '';
+  let currentEvent = 'message';
+  let dataBuffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
+      if (dataBuffer || currentEvent === 'done') {
+        switch (currentEvent) {
+          case 'token':
+            onToken(dataBuffer);
+            break;
+          case 'citations':
+            try {
+              const citations = JSON.parse(dataBuffer) as Citation[];
+              onCitations(citations);
+            } catch { /* ignore parse errors */ }
+            break;
+          case 'done':
+            onDone();
+            break;
+          case 'error':
+            onError(dataBuffer);
+            break;
+        }
+      }
       onDone();
       break;
     }
@@ -191,31 +208,37 @@ export async function chatStream(
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
 
-    let currentEvent = '';
-    for (const line of lines) {
-      if (line.startsWith('event:')) {
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+
+      if (line === '') {
+        if (dataBuffer || currentEvent === 'done') {
+          switch (currentEvent) {
+            case 'token':
+              onToken(dataBuffer);
+              break;
+            case 'citations':
+              try {
+                const citations = JSON.parse(dataBuffer) as Citation[];
+                onCitations(citations);
+              } catch { /* ignore parse errors */ }
+              break;
+            case 'done':
+              onDone();
+              break;
+            case 'error':
+              onError(dataBuffer);
+              break;
+          }
+        }
+        currentEvent = 'message';
+        dataBuffer = '';
+      } else if (line.startsWith('event:')) {
         currentEvent = line.slice(6).trim();
       } else if (line.startsWith('data:')) {
-        const data = line.slice(5).trim();
-
-        switch (currentEvent) {
-          case 'token':
-            onToken(data);
-            break;
-          case 'citations':
-            try {
-              const citations = JSON.parse(data) as Citation[];
-              onCitations(citations);
-            } catch { /* ignore parse errors */ }
-            break;
-          case 'done':
-            onDone();
-            break;
-          case 'error':
-            onError(data);
-            break;
-        }
-        currentEvent = '';
+        const data = line.startsWith('data: ') ? line.slice(6) : line.slice(5);
+        dataBuffer = dataBuffer ? dataBuffer + '\n' + data : data;
       }
     }
   }

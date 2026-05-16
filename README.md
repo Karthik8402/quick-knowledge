@@ -162,7 +162,7 @@ npm install
 
 # 2. Configure environment
 copy .env.example .env
-# Edit .env: VITE_API_BASE_URL=http://localhost:8000
+# Edit .env: VITE_API_URL=http://localhost:8000
 
 # 3. Run development server
 npm run dev
@@ -206,7 +206,7 @@ See `docs/environment-reference.md` for the complete variable reference.
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `VITE_API_BASE_URL` | `http://localhost:8000` | Backend API origin |
+| `VITE_API_URL` | `http://localhost:8000` | Backend API origin |
 
 ---
 
