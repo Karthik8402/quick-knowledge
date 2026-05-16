@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 from langchain_core.documents import Document
+
 from app.citations import validate_citation_indices
 from app.config import get_settings
 from app.generation import FALLBACK_ANSWER, answer_with_citations, stream_answer_with_citations
