@@ -17,7 +17,7 @@ langchain-postgres>=0.0.12
 langgraph>=0.4.0
 
 # ── Vector & Database ──
-psycopg[binary,pool]>=3.2.0
+psycopg2-binary>=2.9.9
 numpy>=2.2.0
 
 # ── Supabase ──
