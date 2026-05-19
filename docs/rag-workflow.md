@@ -40,7 +40,7 @@ This document describes the end-to-end workflow used by the application.
 
 When the documents do not contain an answer, the system returns:
 
-The provided documents do not contain this information.
+Sorry, I could not find this information in your uploaded documents.
 
 ## Why this design is safe
 

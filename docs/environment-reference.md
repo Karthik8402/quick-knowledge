@@ -1,6 +1,6 @@
 # Environment Reference
 
-This file documents backend environment variables.
+This file documents all backend environment variables.
 
 ## Core provider settings
 
@@ -9,8 +9,8 @@ This file documents backend environment variables.
   - Default: `google`
 
 - `LLM_MODEL`
-  - Default: `gemini-2.5-flash-light`
-  - Example alternatives: `gpt-4o-mini`, `minimaxai/minimax-m2.7`, `llama-3.3-70b-versatile`
+  - Default: `gemini-3.1-flash-lite`
+  - Example alternatives: `gpt-4o-mini`, `gemma-3-27b-it`, `llama-3.3-70b-versatile`
 
 - `LLM_TEMPERATURE`
   - Default: `0.2`
@@ -20,6 +20,10 @@ This file documents backend environment variables.
 
 - `LLM_MAX_TOKENS`
   - Optional maximum output tokens (used by NVIDIA)
+
+- `LLM_TIMEOUT_SECONDS`
+  - Default: `45.0`
+  - Timeout for LLM API calls
 
 - `GOOGLE_API_KEY`
   - Required when `LLM_PROVIDER=google` or `EMBEDDING_PROVIDER=google`
@@ -40,13 +44,17 @@ This file documents backend environment variables.
   - Default: `google`
 
 - `EMBEDDING_MODEL`
-  - Default: `text-embedding-004`
+  - Default: `gemini-embedding-001`
 
 ## Vector and storage settings
 
 - `VECTOR_STORE`
-  - Allowed: `chroma`, `faiss`
+  - Allowed: `chroma`, `pgvector`, `faiss`
   - Default: `chroma`
+
+- `STORAGE_BACKEND`
+  - Allowed: `local`, `supabase`
+  - Default: `local`
 
 - `CHROMA_PERSIST_DIR`
   - Default: `./data/chroma`
@@ -63,13 +71,13 @@ This file documents backend environment variables.
 ## RAG tuning settings
 
 - `RAG_TOP_K`
-  - Default: `5`
+  - Default: `6`
 
 - `RAG_CHUNK_SIZE`
-  - Default: `1000`
+  - Default: `800`
 
 - `RAG_CHUNK_OVERLAP`
-  - Default: `200`
+  - Default: `150`
 
 - `MAX_UPLOAD_SIZE_MB`
   - Default: `25`
@@ -78,4 +86,35 @@ This file documents backend environment variables.
   - Default: `10/minute`
 
 - `CORS_ORIGINS`
-  - Default: `http://localhost:5173,http://127.0.0.1:5173`
+  - Default: `http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app`
+
+## Auth settings
+
+- `AUTH_ENABLED`
+  - Allowed: `true`, `false`
+  - Default: `false`
+
+## Supabase settings (required when `STORAGE_BACKEND=supabase`)
+
+- `SUPABASE_URL`
+  - Your Supabase project URL
+
+- `SUPABASE_ANON_KEY`
+  - Supabase anonymous/public key (safe for client-side use)
+
+- `SUPABASE_SERVICE_KEY`
+  - Supabase service role key (server-side only, bypasses RLS)
+
+- `SUPABASE_JWT_SECRET`
+  - JWT secret for auth token validation
+
+- `DATABASE_URL`
+  - Postgres connection string (required when `VECTOR_STORE=pgvector`)
+
+- `SUPABASE_STORAGE_BUCKET`
+  - Default: `documents`
+
+## Optional
+
+- `REDIS_URL`
+  - Redis connection string for optional caching layer
