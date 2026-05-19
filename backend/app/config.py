@@ -67,8 +67,9 @@ def get_settings() -> Settings:
     # Only create local dirs when using local storage
     if settings.storage_backend == "local":
         Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
-        Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
         Path(settings.metadata_db_path).parent.mkdir(parents=True, exist_ok=True)
         Path(settings.sqlite_db_path).parent.mkdir(parents=True, exist_ok=True)
+    if settings.vector_store == "chroma":
+        Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
 
     return settings

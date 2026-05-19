@@ -16,7 +16,9 @@ services:
       - key: STORAGE_BACKEND
         value: supabase
       - key: VECTOR_STORE
-        value: pgvector
+        value: chroma
+      - key: CHROMA_PERSIST_DIR
+        value: ./data/chroma
       - key: AUTH_ENABLED
         value: "true"
       - key: LLM_PROVIDER
@@ -47,8 +49,6 @@ services:
       - key: SUPABASE_SERVICE_KEY
         sync: false
       - key: SUPABASE_JWT_SECRET
-        sync: false
-      - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGINS
         sync: false
