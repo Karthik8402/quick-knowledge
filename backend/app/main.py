@@ -77,6 +77,9 @@ async def lifespan(app: FastAPI):
         settings.auth_enabled,
     )
 
+    # Validate required environment variables for production
+    _validate_production_env(settings)
+
     try:
         emb = get_embeddings()
         vs = build_vector_store(emb)
@@ -93,6 +96,32 @@ async def lifespan(app: FastAPI):
     yield  # app is running
 
     logger.info("Shutting down …")
+
+
+def _validate_production_env(settings) -> None:
+    """Validate required environment variables based on configuration."""
+    missing = []
+
+    if settings.llm_provider == "google" and not settings.google_api_key:
+        missing.append("GOOGLE_API_KEY (required for google LLM provider)")
+
+    if settings.storage_backend == "supabase":
+        if not settings.supabase_url:
+            missing.append("SUPABASE_URL (required for supabase storage backend)")
+        if not settings.supabase_service_key:
+            missing.append("SUPABASE_SERVICE_KEY (required for supabase storage backend)")
+        if not settings.supabase_anon_key:
+            missing.append("SUPABASE_ANON_KEY (required for supabase storage backend)")
+
+    if settings.auth_enabled and not settings.supabase_jwt_secret:
+        missing.append("SUPABASE_JWT_SECRET (required when AUTH_ENABLED=true)")
+
+    if missing:
+        error_msg = f"Missing required environment variables: {'; '.join(missing)}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    logger.info("Environment validation passed")
 
 
 # ---------------------------------------------------------------------------

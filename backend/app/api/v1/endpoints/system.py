@@ -42,6 +42,19 @@ def health(
         "embeddings": embeddings is not None,
     }
 
+    # Check Supabase connectivity when using supabase backend
+    if settings.storage_backend == "supabase":
+        try:
+            from app.core.supabase import get_supabase_client
+
+            client = get_supabase_client()
+            client.table("documents").select("id").limit(1).execute()
+            checks["supabase_connection"] = True
+        except Exception as e:
+            logger.warning("Supabase health check failed: %s", e)
+            checks["supabase_connection"] = False
+            checks["supabase_error"] = str(e)
+
     # Only check disk space in local mode
     if settings.storage_backend == "local":
         data_dir = Path(settings.upload_dir).parent
@@ -51,7 +64,7 @@ def health(
     else:
         disk_free_mb = -1  # Not applicable for cloud storage
 
-    overall = all(checks.values())
+    overall = all(v for k, v in checks.items() if isinstance(v, bool))
 
     return {
         "status": "healthy" if overall else "degraded",

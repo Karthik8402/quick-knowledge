@@ -228,12 +228,9 @@ jobs:
       run:
         working-directory: frontend
     env:
-      VITE_API_URL: ${{ secrets.VITE_API_URL }}
-      VITE_FRONTEND_URL: ${{ secrets.VITE_FRONTEND_URL }}
-      VITE_ENV: "production"
-      VITE_AUTH_ENABLED: "true"
-      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
       - uses: actions/checkout@v4
@@ -247,8 +244,27 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel env vars from Dashboard
+        run: |
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          # Vite reads .env.production from the project root, but vercel pull
+          # downloads to .vercel/.env.production.local — copy it so Vite finds it
+          if [ -f .vercel/.env.production.local ]; then
+            cp .vercel/.env.production.local .env.production
+            echo "Copied Vercel env vars for Vite build"
+          fi
+
       - name: Build production bundle
         run: npm run build
+
+      - name: Verify env vars in build output
+        run: |
+          echo "Checking for VITE_ vars in built bundle..."
+          grep -r "VITE_SUPABASE_URL" dist/ | head -3 || echo "WARNING: VITE_SUPABASE_URL not found in bundle"
+          grep -r "VITE_AUTH_ENABLED" dist/ | head -3 || echo "WARNING: VITE_AUTH_ENABLED not found in bundle"
 
       - name: Analyze bundle size
         run: |
@@ -349,12 +365,18 @@ jobs:
       - name: Validate Render deploy secret
         run: |
           if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
-            echo "Missing RENDER_DEPLOY_HOOK_URL secret"
+            echo "::error::Missing RENDER_DEPLOY_HOOK_URL secret"
             exit 1
           fi
 
       - name: Trigger Render deploy hook
-        run: curl -sf -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          if [ "$response" != "200" ]; then
+            echo "::error::Render deploy hook failed with status: $response"
+            exit 1
+          fi
+          echo "Render deploy triggered successfully"
 
       - name: Wait for Render health check
         run: |
@@ -362,15 +384,37 @@ jobs:
           sleep 120
           for i in $(seq 1 18); do
             status=$(curl -s -o /dev/null -w "%{http_code}" https://intelligent-knowledge.onrender.com/health)
-            echo "Attempt $i: $status"
+            echo "Attempt $i: HTTP $status"
             if [ "$status" = "200" ]; then
               echo "Deploy healthy"
               exit 0
             fi
             sleep 10
           done
-          echo "Health check timed out"
+          echo "::error::Health check timed out after Render deploy"
           exit 1
+
+      - name: Verify production health endpoint
+        run: |
+          response=$(curl -sf https://intelligent-knowledge.onrender.com/health)
+          echo "Health response: $response"
+          echo "$response" | python3 -m json.tool
+
+          # Check critical components
+          storage=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('storage_backend', ''))")
+          vector=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('vector_store', ''))")
+          status=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status', ''))")
+
+          if [ "$storage" != "supabase" ]; then
+            echo "::warning::Storage backend is '$storage', expected 'supabase'"
+          fi
+          if [ "$vector" != "chroma" ]; then
+            echo "::warning::Vector store is '$vector', expected 'chroma'"
+          fi
+          if [ "$status" != "healthy" ]; then
+            echo "::error::Backend status is '$status', expected 'healthy'"
+            exit 1
+          fi
 
   deploy-frontend:
     name: Deploy / Frontend to Vercel
@@ -379,10 +423,11 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
-      url: https://intelligent-knowledge.vercel.app
+      url: https://knowledge.karthikdev.app
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -398,19 +443,43 @@ jobs:
 
       - name: Validate Vercel secrets
         run: |
-          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ secrets.VERCEL_ORG_ID }}" ] || [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
-            echo "Missing Vercel secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID"
+          missing=()
+          [ -z "${{ secrets.VERCEL_TOKEN }}" ] && missing+=("VERCEL_TOKEN")
+          [ -z "${{ secrets.VERCEL_ORG_ID }}" ] && missing+=("VERCEL_ORG_ID")
+          [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ] && missing+=("VERCEL_PROJECT_ID")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing Vercel secrets: ${missing[*]}"
             exit 1
           fi
 
       - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+        run: |
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          # Copy env vars for Vite
+          if [ -f .vercel/.env.production.local ]; then
+            cp .vercel/.env.production.local .env.production
+          fi
 
       - name: Build with Vercel
-        run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+        run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy prebuilt to Vercel
-        run: vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
+        run: |
+          deploy_url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "Deploy URL: $deploy_url"
+
+      - name: Verify frontend deployment
+        run: |
+          for i in $(seq 1 12); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://knowledge.karthikdev.app)
+            echo "Attempt $i: HTTP $status"
+            if [ "$status" = "200" ]; then
+              echo "Frontend deployed and accessible"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::Frontend health check timed out"
 
   pipeline-summary:
     name: Pipeline / Summary
