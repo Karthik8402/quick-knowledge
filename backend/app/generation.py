@@ -40,9 +40,7 @@ def get_embeddings() -> Embeddings:
             api_key=SecretStr(settings.openai_api_key),
         )
 
-    from langchain_huggingface import HuggingFaceEmbeddings
-
-    return HuggingFaceEmbeddings(model_name=settings.embedding_model)
+    raise ValueError(f"Unsupported embedding provider: {settings.embedding_provider}")
 
 
 def get_chat_model():
@@ -67,26 +65,6 @@ def get_chat_model():
             "top_p": settings.llm_top_p,
             "timeout": settings.llm_timeout_seconds,
             "max_retries": 1,
-        }
-        if settings.llm_max_tokens:
-            kwargs["max_completion_tokens"] = settings.llm_max_tokens
-        return ChatOpenAI(**kwargs)
-
-    if settings.llm_provider.lower() == "nvidia":
-        if not settings.nvidia_api_key:
-            raise ValueError("NVIDIA_API_KEY is required for nvidia llm")
-        kwargs = {
-            "model": settings.llm_model,
-            "api_key": settings.nvidia_api_key,
-            "base_url": settings.nvidia_base_url,
-            "temperature": settings.llm_temperature,
-            "top_p": settings.llm_top_p,
-            "timeout": settings.llm_timeout_seconds,
-            "max_retries": 1,
-            "streaming": True,
-            # NVIDIA's OpenAI-compatible chat endpoint does not accept some
-            # OpenAI-only parameters that newer langchain-openai may attach.
-            "disabled_params": {"parallel_tool_calls": None},
         }
         if settings.llm_max_tokens:
             kwargs["max_completion_tokens"] = settings.llm_max_tokens
@@ -193,8 +171,7 @@ def _extract_text(content: Any) -> str:
         return content
     if isinstance(content, list):
         return "".join(
-            block.get("text", "") if isinstance(block, dict) else str(block)
-            for block in content
+            block.get("text", "") if isinstance(block, dict) else str(block) for block in content
         )
     return ""
 

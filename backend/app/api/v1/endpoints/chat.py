@@ -38,7 +38,9 @@ def chat(
         )
 
     if not UsageService.increment_usage(user.user_id):
-        raise HTTPException(status_code=429, detail="AI request limit exceeded. Try again after reset.")
+        raise HTTPException(
+            status_code=429, detail="AI request limit exceeded. Try again after reset."
+        )
 
     return ChatService.build_chat_response(
         body.question, vector_store, reg, user.user_id, body.document_ids
@@ -68,7 +70,9 @@ async def chat_stream(
         return EventSourceResponse(injection_gen())
 
     if not UsageService.increment_usage(user.user_id):
-        raise HTTPException(status_code=429, detail="AI request limit exceeded. Try again after reset.")
+        raise HTTPException(
+            status_code=429, detail="AI request limit exceeded. Try again after reset."
+        )
 
     return EventSourceResponse(
         ChatService.chat_stream_generator(

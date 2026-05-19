@@ -57,13 +57,22 @@ def get_chunks(
         chunks = DocumentService.get_chunks(document_id, vector_store, user.user_id)
     except Exception as e:
         logger.error("Failed to get chunks for doc %s: %s", document_id, e)
-        raise HTTPException(status_code=503, detail={"error": "Chunk retrieval failed", "reason": str(e)}) from e
+        raise HTTPException(
+            status_code=503, detail={"error": "Chunk retrieval failed", "reason": str(e)}
+        ) from e
 
     if not chunks:
         doc = reg.get(document_id)
         if doc:
-            logger.warning("Document %s found in registry but no chunks retrieved for user %s. Missing metadata?", document_id, user.user_id)
-            raise HTTPException(status_code=503, detail={"error": "Chunk retrieval failed", "reason": "Missing owner metadata"})
+            logger.warning(
+                "Document %s found in registry but no chunks retrieved for user %s. Missing metadata?",
+                document_id,
+                user.user_id,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "Chunk retrieval failed", "reason": "Missing owner metadata"},
+            )
         return {"document_id": document_id, "chunks": []}
 
     return {"document_id": document_id, "chunks": chunks}

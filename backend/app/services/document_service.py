@@ -46,16 +46,23 @@ class DocumentService:
                     vector_store.delete(where={"document_id": document_id})
                     if hasattr(vector_store, "persist"):
                         vector_store.persist()
-                    logger.info("Deleted vectors for document %s from %s", document_id, settings.vector_store)
+                    logger.info(
+                        "Deleted vectors for document %s from %s",
+                        document_id,
+                        settings.vector_store,
+                    )
             elif hasattr(vector_store, "docstore"):
                 # FAISS: remove by filtering docstore
                 ids_to_remove = [
-                    k for k, v in vector_store.docstore._dict.items()
+                    k
+                    for k, v in vector_store.docstore._dict.items()
                     if v.metadata.get("document_id") == document_id
                 ]
                 if ids_to_remove and hasattr(vector_store, "delete"):
                     vector_store.delete(ids_to_remove)
-                    logger.info("Deleted %d FAISS vectors for document %s", len(ids_to_remove), document_id)
+                    logger.info(
+                        "Deleted %d FAISS vectors for document %s", len(ids_to_remove), document_id
+                    )
         except Exception as e:
             logger.warning("Failed to delete chunks from vector store: %s", e)
 

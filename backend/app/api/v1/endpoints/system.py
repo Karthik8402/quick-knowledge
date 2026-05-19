@@ -89,6 +89,7 @@ def get_status(
         chunks=chunk_count,
     )
 
+
 @router.get("/system/config")
 def get_system_config():
     """Get active platform configuration and initialization status."""
@@ -101,13 +102,16 @@ def get_system_config():
         "llm_model": settings.llm_model,
         "embedding_provider": settings.embedding_provider,
         "embedding_model": settings.embedding_model,
-        "vector_store": settings.vector_store
+        "vector_store": settings.vector_store,
     }
+
 
 @router.get("/usage")
 def get_user_usage(user: UserContext = Depends(get_current_user)):
     """Get AI usage quota for the current user."""
     return UsageService.get_usage(user.user_id)
+
+
 @router.get("/settings", response_model=SettingsResponse)
 def get_current_settings(
     user: UserContext = Depends(get_current_user),

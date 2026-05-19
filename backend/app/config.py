@@ -16,12 +16,10 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 45.0
     google_api_key: str = ""
     openai_api_key: str = ""
-    nvidia_api_key: str = ""
-    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     groq_api_key: str = ""
 
     embedding_provider: str = "google"
-    embedding_model: str = "text-embedding-004"
+    embedding_model: str = "gemini-embedding-001"
 
     # ── Vector Store ──
     vector_store: str = "chroma"  # "chroma" | "pgvector"
@@ -54,7 +52,9 @@ class Settings(BaseSettings):
     rate_limit: str = "10/minute"
 
     # ── CORS ──
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app"
+    cors_origins: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app"
+    )
 
     # ── Redis (optional caching) ──
     redis_url: str = ""

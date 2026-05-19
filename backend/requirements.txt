@@ -12,12 +12,9 @@ langchain-community>=0.3.20
 langchain-openai>=0.3.0
 langchain-google-genai>=2.1.0
 langchain-text-splitters>=0.3.6
-langchain-huggingface>=0.1.2
 langchain-groq>=0.2.1
 langchain-postgres>=0.0.12
 langgraph>=0.4.0
-sentence-transformers>=3.0.0
-transformers>=4.40.0
 
 # ── Vector & Database ──
 psycopg[binary,pool]>=3.2.0

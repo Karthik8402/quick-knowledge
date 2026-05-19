@@ -40,10 +40,12 @@ class ChatService:
             return FALLBACK_ANSWER
         # Prefer the longest chunk to avoid returning only a title line.
         best_doc = max(retrieved, key=lambda item: len(item[0].page_content or ""))[0]
-        joined = " ".join([
-            (best_doc.page_content or "").strip(),
-            *[doc.page_content.strip() for doc, _score in retrieved[1:] if doc.page_content],
-        ])
+        joined = " ".join(
+            [
+                (best_doc.page_content or "").strip(),
+                *[doc.page_content.strip() for doc, _score in retrieved[1:] if doc.page_content],
+            ]
+        )
         sentences = [s for s in re.split(r"(?<=[.!?])\s+", joined) if s]
         summary = " ".join(sentences[:4]).strip()
         if not summary:
@@ -58,8 +60,11 @@ class ChatService:
             return None
 
         docs = reg.list_documents(owner_id=owner_id) or []
-        matched = [doc.get("document_id") for doc in docs
-                   if "resume" in (doc.get("file_name") or "").lower()]
+        matched = [
+            doc.get("document_id")
+            for doc in docs
+            if "resume" in (doc.get("file_name") or "").lower()
+        ]
         return [doc_id for doc_id in matched if doc_id] or None
 
     @staticmethod
@@ -82,7 +87,9 @@ class ChatService:
             )
 
         settings = get_settings()
-        inferred_doc_ids = document_ids or ChatService._infer_document_filter(question, reg, owner_id)
+        inferred_doc_ids = document_ids or ChatService._infer_document_filter(
+            question, reg, owner_id
+        )
         retrieved = retrieve_chunks(
             vector_store=vector_store,
             question=question,
@@ -177,7 +184,9 @@ class ChatService:
             return
 
         settings = get_settings()
-        inferred_doc_ids = document_ids or ChatService._infer_document_filter(question, reg, owner_id)
+        inferred_doc_ids = document_ids or ChatService._infer_document_filter(
+            question, reg, owner_id
+        )
         retrieved = retrieve_chunks(
             vector_store=vector_store,
             question=question,

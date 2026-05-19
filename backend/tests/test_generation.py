@@ -99,32 +99,6 @@ class TestBuildMessages:
             assert len(messages) == 1  # Single HumanMessage for Gemma
 
 
-class TestGetChatModel:
-    @patch("app.generation.ChatOpenAI")
-    @patch("app.generation.get_settings")
-    def test_nvidia_uses_openai_compatible_client(self, mock_settings, mock_chat_openai):
-        from app.generation import get_chat_model
-
-        mock_settings.return_value = MagicMock(
-            llm_provider="nvidia",
-            llm_model="minimaxai/minimax-m2.7",
-            nvidia_api_key="test-key",
-            nvidia_base_url="https://integrate.api.nvidia.com/v1",
-            llm_temperature=0.0,
-            llm_top_p=1.0,
-            llm_timeout_seconds=45.0,
-            llm_max_tokens=500,
-        )
-
-        get_chat_model()
-
-        mock_chat_openai.assert_called_once()
-        kwargs = mock_chat_openai.call_args.kwargs
-        assert kwargs["base_url"] == "https://integrate.api.nvidia.com/v1"
-        assert kwargs["timeout"] == 45.0
-        assert kwargs["streaming"] is True
-
-
 class TestAnswerWithCitations:
     def test_empty_docs_returns_fallback(self):
         from app.generation import FALLBACK_ANSWER, answer_with_citations

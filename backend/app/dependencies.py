@@ -30,7 +30,11 @@ def set_embeddings(emb: Any) -> None:
 def get_vector_store() -> Any:
     """Dependency that provides the active vector store, or raises if unavailable."""
     if _vector_store is None:
-        error_msg = str(_init_error) if _init_error else "Vector store not initialized. Check configuration."
+        error_msg = (
+            str(_init_error)
+            if _init_error
+            else "Vector store not initialized. Check configuration."
+        )
         raise VectorStoreNotInitializedError(error_msg)
     return _vector_store
 
@@ -49,9 +53,11 @@ def get_registry():
     """Dependency that provides the document registry (local or Supabase)."""
     return registry
 
+
 def set_init_error(err: Exception | None) -> None:
     global _init_error
     _init_error = err
+
 
 def get_init_error() -> Exception | None:
     return _init_error

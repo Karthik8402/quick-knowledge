@@ -59,7 +59,7 @@ class UsageService:
             "percentage": percentage,
             "reset_at": reset_at,
             "plan": "Free",
-            "status": "active" if remaining > 0 else "exhausted"
+            "status": "active" if remaining > 0 else "exhausted",
         }
 
     @staticmethod

@@ -31,7 +31,7 @@ class TestSettings:
         os.environ["METADATA_DB_PATH"] = str(tmp_path / "registry.json")
         s = Settings(_env_file=None)
         assert s.embedding_provider == "google"
-        assert s.embedding_model == "text-embedding-004"
+        assert s.embedding_model == "gemini-embedding-001"
 
     def test_reads_env_overrides(self, tmp_path, monkeypatch):
         from app.config import Settings
