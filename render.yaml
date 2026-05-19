@@ -52,3 +52,5 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+        # Value to set in Render Dashboard:
+        # http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app,https://knowledge.karthikdev.app

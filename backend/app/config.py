@@ -53,7 +53,7 @@ class Settings(BaseSettings):
 
     # ── CORS ──
     cors_origins: str = (
-        "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app"
+        "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app,https://knowledge.karthikdev.app"
     )
 
     # ── Redis (optional caching) ──
