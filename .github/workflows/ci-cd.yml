@@ -359,7 +359,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
-      url: https://intelligent-knowledge.onrender.com
+      url: https://api-knowledge.karthikdev.app
 
     steps:
       - name: Validate Render deploy secret
@@ -372,18 +372,19 @@ jobs:
       - name: Trigger Render deploy hook
         run: |
           response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
-          if [ "$response" != "200" ] && [ "$response" != "202" ]; then
+          # Render returns 200 (immediate) or 201 (queued) on success
+          if [ "$response" != "200" ] && [ "$response" != "201" ]; then
             echo "::error::Render deploy hook failed with status: $response"
             exit 1
           fi
-          echo "Render deploy triggered successfully"
+          echo "Render deploy triggered successfully (HTTP $response)"
 
       - name: Wait for Render health check
         run: |
-          echo "Waiting for Render deploy..."
+          echo "Waiting for Render deploy to complete..."
           sleep 120
           for i in $(seq 1 18); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" https://intelligent-knowledge.onrender.com/health)
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://api-knowledge.karthikdev.app/health)
             echo "Attempt $i: HTTP $status"
             if [ "$status" = "200" ]; then
               echo "Deploy healthy"
@@ -396,7 +397,7 @@ jobs:
 
       - name: Verify production health endpoint
         run: |
-          response=$(curl -sf https://intelligent-knowledge.onrender.com/health)
+          response=$(curl -sf https://api-knowledge.karthikdev.app/health)
           echo "Health response: $response"
           echo "$response" | python3 -m json.tool
 
@@ -452,16 +453,16 @@ jobs:
             exit 1
           fi
 
-      - name: Pull Vercel environment
+      - name: Pull Vercel environment and build
+        # Note: env vars are already pulled and bundled in the frontend-build job artifact.
+        # Here we pull again to ensure the deploy-frontend job uses the latest dashboard values.
         run: |
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          # Copy env vars for Vite
           if [ -f .vercel/.env.production.local ]; then
             cp .vercel/.env.production.local .env.production
+            echo "Env vars pulled from Vercel Dashboard"
           fi
-
-      - name: Build with Vercel
-        run: vercel build --prod --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy prebuilt to Vercel
         run: |
