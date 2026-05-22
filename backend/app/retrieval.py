@@ -55,10 +55,32 @@ def _build_pgvector_store(embeddings: Embeddings):
 
 
 def _build_chroma_store(embeddings: Embeddings):
-    """Build a local ChromaDB store."""
+    """Build a local ChromaDB store with a robust retry mechanism for race conditions."""
     from langchain_chroma import Chroma
+    import time
+    import random
 
     settings = get_settings()
+    
+    for attempt in range(3):
+        try:
+            return Chroma(
+                persist_directory=settings.chroma_persist_dir,
+                embedding_function=embeddings,
+                collection_name="knowledge_base",
+            )
+        except Exception as e:
+            if "already exists" in str(e) or "locked" in str(e).lower():
+                logger.warning(
+                    "ChromaDB initialization collision, retrying in a moment (attempt %d/3): %s",
+                    attempt + 1,
+                    e
+                )
+                time.sleep(1.0 + random.random())
+            else:
+                raise
+                
+    # Final fallback attempt
     return Chroma(
         persist_directory=settings.chroma_persist_dir,
         embedding_function=embeddings,
