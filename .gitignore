@@ -45,3 +45,4 @@ yarn-error.log*
 stitch_projects/*
 skills/*
 .temp/
+.mypy_cache/

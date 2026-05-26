@@ -39,7 +39,7 @@ def health(
     """Deep health check — remains public for load balancers and uptime monitors."""
     settings = get_settings()
 
-    checks = {
+    checks: dict[str, Any] = {
         "vector_store": vector_store is not None,
         "embeddings": embeddings is not None,
     }
