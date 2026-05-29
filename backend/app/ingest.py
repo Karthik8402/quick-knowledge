@@ -14,6 +14,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from . import storage
 from .config import get_settings
+from .exceptions import EmptyDocumentError, FileTooLargeError, UnsupportedFileTypeError
 from .storage import content_hash_from_bytes, create_document_id
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ def _validate_file_type(file_name: str, file_bytes: bytes) -> str:
     """Validate file extension and magic bytes. Returns the extension."""
     extension = Path(file_name).suffix.lower()
     if extension not in ALLOWED_EXTENSIONS:
-        raise ValueError(f"Unsupported file type: {extension}")
+        raise UnsupportedFileTypeError(extension)
 
     # Magic byte validation for binary formats
     expected_magic = MAGIC_BYTES.get(extension)
@@ -61,7 +62,7 @@ def _load_documents(path: Path) -> list[Document]:
     if suffix == ".docx":
         return Docx2txtLoader(str(path)).load()
 
-    raise ValueError(f"Unsupported file type: {suffix}")
+    raise UnsupportedFileTypeError(suffix)
 
 
 def _enrich_metadata(
@@ -106,6 +107,7 @@ def ingest_files(
     results = []
 
     for upload in files:
+        temp_dir = None
         try:
             if not upload.filename:
                 raise ValueError("Uploaded file is missing a filename")
@@ -117,7 +119,7 @@ def ingest_files(
             # Validate file size
             max_bytes = settings.max_upload_size_mb * 1024 * 1024
             if len(file_bytes) > max_bytes:
-                raise ValueError(f"File exceeds max size of {settings.max_upload_size_mb} MB")
+                raise FileTooLargeError(upload.filename, settings.max_upload_size_mb)
 
             # Validate file type (extension + magic bytes)
             extension = _validate_file_type(upload.filename, file_bytes)
@@ -149,7 +151,8 @@ def ingest_files(
                 # For parsing, write temporarily to a temp location
                 import tempfile
 
-                tmp = Path(tempfile.mkdtemp()) / upload.filename
+                temp_dir = Path(tempfile.mkdtemp())
+                tmp = temp_dir / upload.filename
                 tmp.write_bytes(file_bytes)
                 destination = tmp
             else:
@@ -160,7 +163,7 @@ def ingest_files(
             # Parse and chunk
             base_docs = _load_documents(destination)
             if not base_docs:
-                raise ValueError("Document is empty or unreadable")
+                raise EmptyDocumentError(upload.filename)
 
             chunks = splitter.split_documents(base_docs)
             chunks = _enrich_metadata(chunks, document_id, upload.filename, owner_id)
@@ -177,10 +180,6 @@ def ingest_files(
 
             if hasattr(vector_store, "persist"):
                 vector_store.persist()
-
-            # Clean up temp file if using Supabase
-            if settings.storage_backend == "supabase" and destination.exists():
-                destination.unlink(missing_ok=True)
 
             # Save metadata to registry
             record = {
@@ -217,5 +216,10 @@ def ingest_files(
                     "error": str(exc),
                 }
             )
+        finally:
+            if temp_dir and temp_dir.exists():
+                import shutil
+
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
     return results

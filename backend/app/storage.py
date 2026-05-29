@@ -43,10 +43,16 @@ class LocalDocumentRegistry:
             self.path.write_text(json.dumps({"documents": []}, indent=2), encoding="utf-8")
             logger.info("Initialized empty document registry at %s", self.path)
 
+        try:
+            self._cached_data = json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            self._cached_data = {"documents": []}
+
     def _read(self) -> dict:
-        return json.loads(self.path.read_text(encoding="utf-8"))
+        return self._cached_data
 
     def _write(self, payload: dict) -> None:
+        self._cached_data = payload
         self.path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def list_documents(self, owner_id: str | None = None) -> list[dict]:
@@ -123,7 +129,11 @@ class SupabaseDocumentRegistry:
         return result.data or []
 
     def count(self, owner_id: str | None = None) -> int:
-        return len(self.list_documents(owner_id))
+        query = self._client.table(self._table).select("document_id", count="exact")
+        if owner_id:
+            query = query.eq("owner_id", owner_id)
+        result = query.limit(0).execute()
+        return result.count or 0
 
     def find_by_hash(self, content_hash: str, owner_id: str | None = None) -> dict | None:
         query = self._client.table(self._table).select("*").eq("content_hash", content_hash)

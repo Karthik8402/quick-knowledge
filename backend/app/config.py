@@ -50,11 +50,10 @@ class Settings(BaseSettings):
     # ── Limits ──
     max_upload_size_mb: int = 25
     rate_limit: str = "10/minute"
+    daily_usage_limit: int = 50
 
     # ── CORS ──
-    cors_origins: str = (
-        "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app,https://knowledge.karthikdev.app"
-    )
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app,https://knowledge.karthikdev.app"
 
     # ── Redis (optional caching) ──
     redis_url: str = ""

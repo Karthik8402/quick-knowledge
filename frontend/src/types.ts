@@ -69,3 +69,23 @@ export type Settings = {
   vector_store: string;
   max_upload_size_mb: number;
 };
+
+export type UsageResponse = {
+  used: number;
+  limit: number;
+  remaining: number;
+  percentage: number;
+  reset_at: string;
+  plan: string;
+  status: 'active' | 'exhausted';
+};
+
+export type SystemConfig = {
+  configured: boolean;
+  init_error: string | null;
+  llm_provider: string;
+  llm_model: string;
+  embedding_provider: string;
+  embedding_model: string;
+  vector_store: string;
+};

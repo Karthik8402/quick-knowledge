@@ -11,7 +11,7 @@ import shutil
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.config import get_settings
 from app.core.auth import UserContext, get_current_user
@@ -73,7 +73,9 @@ def health(
         "timestamp": datetime.now(UTC).isoformat(),
         "uptime_seconds": round(time.time() - _start_time),
         "version": "3.0.0",
-        "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "local",
+        "git_commit": os.environ.get("RENDER_GIT_COMMIT")
+        or os.environ.get("GIT_COMMIT")
+        or "local",
         "python_version": platform.python_version(),
         "disk_free_mb": round(disk_free_mb, 2) if disk_free_mb >= 0 else None,
         "storage_backend": settings.storage_backend,
@@ -154,6 +156,12 @@ def update_settings(
     user: UserContext = Depends(get_current_user),
 ):
     """Update settings in memory — optionally requires authentication."""
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required to change settings",
+        )
+
     settings = get_settings()
 
     # Apply in-memory updates (does not persist to .env)

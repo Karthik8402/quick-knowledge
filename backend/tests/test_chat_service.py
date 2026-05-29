@@ -61,6 +61,7 @@ class TestBuildChatResponseFallbacks:
 
     def _make_reg(self, has_docs: bool = False) -> MagicMock:
         reg = MagicMock()
+        reg.count.return_value = 1 if has_docs else 0
         reg.list_documents.return_value = [{"document_id": "d1"}] if has_docs else []
         return reg
 
@@ -96,7 +97,17 @@ class TestBuildChatResponseFallbacks:
         reg = self._make_reg(has_docs=True)
         vector_store = MagicMock()
 
-        with patch("app.services.chat_service.retrieve_chunks", return_value=[]):
+        from app.agents.graph import RAGState
+
+        mock_state = RAGState(
+            question="obscure question",
+            retrieved_docs=[],
+            relevant_docs=[],
+            answer="Sorry, I could not find this information in your uploaded documents.",
+            fallback=True,
+        )
+
+        with patch("app.agents.graph.run_rag_agent", return_value=mock_state):
             result = ChatService.build_chat_response(
                 question="obscure question",
                 vector_store=vector_store,
@@ -116,7 +127,7 @@ class TestBuildChatResponseSuccess:
 
     def _make_reg(self) -> MagicMock:
         reg = MagicMock()
-        reg.list_documents.return_value = [{"document_id": "d1"}]
+        reg.count.return_value = 1
         return reg
 
     def _make_doc(self, text: str = "sample content", doc_id: str = "d1") -> MagicMock:
@@ -133,19 +144,18 @@ class TestBuildChatResponseSuccess:
         reg = self._make_reg()
         vector_store = MagicMock()
         doc = self._make_doc()
-        retrieved = [(doc, 0.92)]
 
-        with (
-            patch("app.services.chat_service.retrieve_chunks", return_value=retrieved),
-            patch(
-                "app.services.chat_service.answer_with_citations",
-                return_value={
-                    "answer": "This is the answer [1]",
-                    "citation_indices": [1],
-                },
-            ),
-            patch("app.services.chat_service.validate_citation_indices", return_value={1}),
-        ):
+        from app.agents.graph import RAGState
+
+        mock_state = RAGState(
+            question="Tell me about the report",
+            retrieved_docs=[(doc, 0.92)],
+            relevant_docs=[(doc, 0.92)],
+            answer="This is the answer [1]",
+            citation_indices=[1],
+        )
+
+        with patch("app.agents.graph.run_rag_agent", return_value=mock_state):
             result = ChatService.build_chat_response(
                 question="Tell me about the report",
                 vector_store=vector_store,
@@ -165,19 +175,18 @@ class TestBuildChatResponseSuccess:
         vector_store = MagicMock()
         doc = self._make_doc()
         doc.metadata["page"] = 0  # first page in 0-indexed format
-        retrieved = [(doc, 0.85)]
 
-        with (
-            patch("app.services.chat_service.retrieve_chunks", return_value=retrieved),
-            patch(
-                "app.services.chat_service.answer_with_citations",
-                return_value={
-                    "answer": "answer [1]",
-                    "citation_indices": [1],
-                },
-            ),
-            patch("app.services.chat_service.validate_citation_indices", return_value={1}),
-        ):
+        from app.agents.graph import RAGState
+
+        mock_state = RAGState(
+            question="question",
+            retrieved_docs=[(doc, 0.85)],
+            relevant_docs=[(doc, 0.85)],
+            answer="answer [1]",
+            citation_indices=[1],
+        )
+
+        with patch("app.agents.graph.run_rag_agent", return_value=mock_state):
             result = ChatService.build_chat_response("question", vector_store, reg, "anon")
 
         assert result.retrieved_chunks[0].page == 1
@@ -186,19 +195,18 @@ class TestBuildChatResponseSuccess:
         reg = self._make_reg()
         vector_store = MagicMock()
         doc = self._make_doc()
-        retrieved = [(doc, 0.1234567)]
 
-        with (
-            patch("app.services.chat_service.retrieve_chunks", return_value=retrieved),
-            patch(
-                "app.services.chat_service.answer_with_citations",
-                return_value={
-                    "answer": "answer",
-                    "citation_indices": [],
-                },
-            ),
-            patch("app.services.chat_service.validate_citation_indices", return_value=set()),
-        ):
+        from app.agents.graph import RAGState
+
+        mock_state = RAGState(
+            question="question",
+            retrieved_docs=[(doc, 0.1234567)],
+            relevant_docs=[(doc, 0.1234567)],
+            answer="answer",
+            citation_indices=[],
+        )
+
+        with patch("app.agents.graph.run_rag_agent", return_value=mock_state):
             result = ChatService.build_chat_response("question", vector_store, reg, "anon")
 
         assert result.retrieved_chunks[0].score == 0.1235
@@ -207,19 +215,18 @@ class TestBuildChatResponseSuccess:
         reg = self._make_reg()
         vector_store = MagicMock()
         doc = self._make_doc(text="x" * 2000)
-        retrieved = [(doc, 0.9)]
 
-        with (
-            patch("app.services.chat_service.retrieve_chunks", return_value=retrieved),
-            patch(
-                "app.services.chat_service.answer_with_citations",
-                return_value={
-                    "answer": "answer",
-                    "citation_indices": [],
-                },
-            ),
-            patch("app.services.chat_service.validate_citation_indices", return_value=set()),
-        ):
+        from app.agents.graph import RAGState
+
+        mock_state = RAGState(
+            question="question",
+            retrieved_docs=[(doc, 0.9)],
+            relevant_docs=[(doc, 0.9)],
+            answer="answer",
+            citation_indices=[],
+        )
+
+        with patch("app.agents.graph.run_rag_agent", return_value=mock_state):
             result = ChatService.build_chat_response("question", vector_store, reg, "anon")
 
         assert len(result.retrieved_chunks[0].text) == 800

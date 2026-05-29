@@ -51,12 +51,13 @@ class TestLoadDocuments:
     """Tests for the document loader dispatch."""
 
     def test_raises_on_unsupported_file_type(self, tmp_path):
+        from app.exceptions import UnsupportedFileTypeError
         from app.ingest import _load_documents
 
         fake_file = tmp_path / "data.xlsx"
         fake_file.write_text("data")
 
-        with pytest.raises(ValueError, match="Unsupported file type"):
+        with pytest.raises(UnsupportedFileTypeError, match="Unsupported file type"):
             _load_documents(fake_file)
 
     def test_loads_txt_file(self, tmp_path):
@@ -89,9 +90,10 @@ class TestValidateFileType:
         assert ext == ".txt"
 
     def test_rejects_unsupported_extension(self):
+        from app.exceptions import UnsupportedFileTypeError
         from app.ingest import _validate_file_type
 
-        with pytest.raises(ValueError, match="Unsupported file type"):
+        with pytest.raises(UnsupportedFileTypeError, match="Unsupported file type"):
             _validate_file_type("data.xlsx", b"some data")
 
     def test_validates_pdf_magic_bytes(self):

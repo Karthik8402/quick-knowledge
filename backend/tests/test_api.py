@@ -211,32 +211,54 @@ class TestChatEndpoint:
 # Chat Streaming Endpoint
 # ═══════════════════════════════════════════════════════════════════════════
 class TestChatStreamEndpoint:
-    def test_stream_returns_200(self, test_client):
-        resp = test_client.post(
+    @pytest.mark.asyncio
+    async def test_stream_returns_200(self, async_test_client):
+        import asyncio
+
+        from sse_starlette.sse import AppStatus
+
+        AppStatus.should_exit_event = asyncio.Event()
+
+        resp = await async_test_client.post(
             "/chat/stream",
             json={"question": "What is AI?"},
         )
         assert resp.status_code == 200
 
-    @pytest.mark.xfail(
-        reason="sse-starlette event loop binding issue with sync TestClient", strict=False
-    )
-    def test_stream_content_type_is_sse(self, test_client):
-        resp = test_client.post(
+    @pytest.mark.asyncio
+    async def test_stream_content_type_is_sse(self, async_test_client):
+        import asyncio
+
+        from sse_starlette.sse import AppStatus
+
+        AppStatus.should_exit_event = asyncio.Event()
+
+        resp = await async_test_client.post(
             "/chat/stream",
             json={"question": "test"},
         )
         assert "text/event-stream" in resp.headers.get("content-type", "")
 
-    def test_stream_empty_question_returns_422(self, test_client):
-        resp = test_client.post("/chat/stream", json={"question": ""})
+    @pytest.mark.asyncio
+    async def test_stream_empty_question_returns_422(self, async_test_client):
+        import asyncio
+
+        from sse_starlette.sse import AppStatus
+
+        AppStatus.should_exit_event = asyncio.Event()
+
+        resp = await async_test_client.post("/chat/stream", json={"question": ""})
         assert resp.status_code == 422
 
-    @pytest.mark.xfail(
-        reason="sse-starlette event loop binding issue with sync TestClient", strict=False
-    )
-    def test_stream_contains_events(self, test_client):
-        resp = test_client.post(
+    @pytest.mark.asyncio
+    async def test_stream_contains_events(self, async_test_client):
+        import asyncio
+
+        from sse_starlette.sse import AppStatus
+
+        AppStatus.should_exit_event = asyncio.Event()
+
+        resp = await async_test_client.post(
             "/chat/stream",
             json={"question": "test"},
         )
@@ -280,6 +302,21 @@ class TestSettingsEndpoint:
         resp = test_client.get("/settings")
         data = resp.json()
         assert data["rag_top_k"] == 15
+
+    def test_update_settings_as_non_admin_fails(self, test_client):
+        from app.core.auth import UserContext, get_current_user
+        from app.main import app
+
+        def mock_regular_user():
+            return UserContext(user_id="user-456", email="user@example.com", role="authenticated")
+
+        app.dependency_overrides[get_current_user] = mock_regular_user
+        try:
+            resp = test_client.put("/settings", json={"rag_top_k": 3})
+            assert resp.status_code == 403
+            assert "Admin privileges required" in resp.json()["detail"]
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

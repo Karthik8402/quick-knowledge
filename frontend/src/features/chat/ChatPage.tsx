@@ -4,6 +4,7 @@ import { chat, chatStream } from '../../api';
 import type { ChatResponse, Citation } from '../../types';
 import ConfirmToast from '../../components/ui/ConfirmToast';
 import { useUsageStore } from '../../services/usage';
+import ChatInput from './components/ChatInput';
 
 /* ──────────────────────────────────────────────
    Types
@@ -162,7 +163,6 @@ export default function ChatPage() {
   const [shouldStickToBottom, setShouldStickToBottom] = useState(true);
   const [pendingSessionDelete, setPendingSessionDelete] = useState<ChatSession | null>(null);
   const bottomRef   = useRef<HTMLDivElement>(null);
-  const inputRef    = useRef<HTMLTextAreaElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
   const scrollPositionsRef = useRef<Record<string, number>>({});
   
@@ -224,13 +224,6 @@ export default function ChatPage() {
     container.scrollTop = container.scrollHeight;
   }, [activeId]);
 
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 120) + 'px';
-    }
-  }, [input]);
-
   const startNewChat = useCallback(() => {
     if (docFilter) {
       setSearchParams({});
@@ -248,6 +241,41 @@ export default function ChatPage() {
       if (idx === -1) return prev;
       const updated = [...prev];
       updated[idx] = { ...updated[idx], messages: newMessages, updatedAt: Date.now(), ...(title ? { title } : {}) };
+      return updated;
+    });
+  }, []);
+
+  const appendTokenToSession = useCallback((id: string, token: string) => {
+    setSessions((prev) => {
+      const idx = prev.findIndex((s) => s.id === id);
+      if (idx === -1) return prev;
+      const updated = [...prev];
+      const session = updated[idx];
+      const msgs = [...session.messages];
+      if (msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant') {
+        const last = msgs[msgs.length - 1];
+        msgs[msgs.length - 1] = { ...last, text: last.text + token };
+      } else {
+        msgs.push({ role: 'assistant', text: token });
+      }
+      updated[idx] = { ...session, messages: msgs, updatedAt: Date.now() };
+      return updated;
+    });
+  }, []);
+
+  const finalizeSessionMessage = useCallback((id: string, text: string, data?: ChatResponse) => {
+    setSessions((prev) => {
+      const idx = prev.findIndex((s) => s.id === id);
+      if (idx === -1) return prev;
+      const updated = [...prev];
+      const session = updated[idx];
+      const msgs = [...session.messages];
+      if (msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant') {
+        msgs[msgs.length - 1] = { role: 'assistant', text, data };
+      } else {
+        msgs.push({ role: 'assistant', text, data });
+      }
+      updated[idx] = { ...session, messages: msgs, updatedAt: Date.now() };
       return updated;
     });
   }, []);
@@ -275,13 +303,15 @@ export default function ChatPage() {
     setInput('');
 
     let sessionId = activeId;
-    let currentMessages = [...messages];
 
     if (!sessionId) {
       const newSession: ChatSession = {
         id: generateId(),
         title: q.length > 50 ? q.slice(0, 50) + '…' : q,
-        messages: [],
+        messages: [
+          { role: 'user', text: q },
+          { role: 'assistant', text: '' }
+        ],
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -289,15 +319,28 @@ export default function ChatPage() {
       setSessions((prev) => [newSession, ...prev]);
       setActiveId(sessionId);
       setNewChatRequested(false);
-      currentMessages = [];
+    } else {
+      setSessions((prev) => {
+        const idx = prev.findIndex((s) => s.id === sessionId);
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        const session = updated[idx];
+        updated[idx] = {
+          ...session,
+          messages: [
+            ...session.messages,
+            { role: 'user', text: q },
+            { role: 'assistant', text: '' }
+          ],
+          updatedAt: Date.now(),
+        };
+        return updated;
+      });
     }
 
-    const withUser: Message[] = [...currentMessages, { role: 'user', text: q }];
-    updateSession(sessionId, withUser);
     setLoading(true);
     setShouldStickToBottom(true);
 
-    // Try SSE streaming first, fall back to standard chat
     let streamedText = '';
     let streamCitations: Citation[] = [];
 
@@ -307,10 +350,10 @@ export default function ChatPage() {
       await chatStream(
         q,
         documentIds,
-        // onToken: append token and update session in real-time
+        // onToken: append token using functional updates
         (token) => {
           streamedText += token;
-          updateSession(sessionId!, [...withUser, { role: 'assistant', text: streamedText }]);
+          appendTokenToSession(sessionId!, token);
         },
         // onCitations: store citations
         (citations) => {
@@ -326,7 +369,7 @@ export default function ChatPage() {
             citations: streamCitations,
             retrieved_chunks: [],
           };
-          updateSession(sessionId!, [...withUser, { role: 'assistant', text: finalAnswer, data: finalData }]);
+          finalizeSessionMessage(sessionId!, finalAnswer, finalData);
           setLoading(false);
           decrementRemaining();
         },
@@ -335,10 +378,10 @@ export default function ChatPage() {
           console.warn('Stream failed, falling back to standard chat:', error);
           try {
             const res = await chat(q, documentIds);
-            updateSession(sessionId!, [...withUser, { role: 'assistant', text: res.answer, data: res }]);
+            finalizeSessionMessage(sessionId!, res.answer, res);
             decrementRemaining();
           } catch (e2: any) {
-            updateSession(sessionId!, [...withUser, { role: 'assistant', text: `Error: ${e2.message}` }]);
+            finalizeSessionMessage(sessionId!, `Error: ${e2.message}`);
           } finally {
             setLoading(false);
           }
@@ -348,10 +391,10 @@ export default function ChatPage() {
       // Network-level failure — fall back to standard chat
       try {
         const res = await chat(q, documentIds);
-        updateSession(sessionId!, [...withUser, { role: 'assistant', text: res.answer, data: res }]);
+        finalizeSessionMessage(sessionId!, res.answer, res);
         decrementRemaining();
       } catch (e2: any) {
-        updateSession(sessionId!, [...withUser, { role: 'assistant', text: `Error: ${e2.message}` }]);
+        finalizeSessionMessage(sessionId!, `Error: ${e2.message}`);
       } finally {
         setLoading(false);
       }
@@ -366,7 +409,6 @@ export default function ChatPage() {
 
   const handleSuggestion = (prompt: string) => {
     setInput(prompt);
-    inputRef.current?.focus();
   };
 
   const handleScroll = () => {
@@ -436,6 +478,7 @@ export default function ChatPage() {
               onClick={() => (isDesktop ? setHistoryCollapsed((v) => !v) : setHistoryOpen(false))}
               className="p-1 hover:bg-surface-container rounded-lg transition-colors"
               title={historyCollapsed ? 'Expand history' : 'Collapse history'}
+              aria-label={historyCollapsed ? 'Expand history' : 'Collapse history'}
             >
               <span className="material-symbols-outlined text-sm text-outline">
                 {historyCollapsed ? 'chevron_right' : 'chevron_left'}
@@ -447,6 +490,7 @@ export default function ChatPage() {
             <button
               onClick={startNewChat}
               className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary-container/25 border border-primary/20 rounded-xl text-xs font-bold text-primary hover:bg-primary-container/35 hover:border-primary/40 transition-all duration-300"
+              aria-label="Create new conversation"
             >
               <span className="material-symbols-outlined text-sm">add</span>
               New Conversation
@@ -460,7 +504,7 @@ export default function ChatPage() {
                 onChange={(e) => setHistoryQuery(e.target.value)}
               />
               {historyQuery && (
-                <button onClick={() => setHistoryQuery('')} className="text-outline hover:text-on-surface transition-colors">
+                <button onClick={() => setHistoryQuery('')} className="text-outline hover:text-on-surface transition-colors" aria-label="Clear search query">
                   <span className="material-symbols-outlined text-sm">close</span>
                 </button>
               )}
@@ -499,6 +543,7 @@ export default function ChatPage() {
                       onClick={(e) => { e.stopPropagation(); requestDeleteSession(s); }}
                       className="opacity-0 group-hover:opacity-100 p-1 hover:bg-error/10 rounded transition-all flex-shrink-0"
                       title="Delete"
+                      aria-label={`Delete conversation: ${s.title}`}
                     >
                       <span className="material-symbols-outlined text-xs text-error">delete</span>
                     </button>
@@ -519,10 +564,11 @@ export default function ChatPage() {
             onClick={() => (isDesktop ? setHistoryCollapsed((v) => !v) : setHistoryOpen(!historyOpen))}
             className="p-2 hover:bg-surface-container/70 rounded-xl transition-all duration-200 group"
             title="Chat History"
+            aria-label="Toggle chat history sidebar"
           >
             <span className="material-symbols-outlined text-lg text-outline group-hover:text-on-surface transition-colors">history</span>
           </button>
-          <button onClick={startNewChat} className="p-2 hover:bg-surface-container/70 rounded-xl transition-all duration-200 group" title="New Chat">
+          <button onClick={startNewChat} className="p-2 hover:bg-surface-container/70 rounded-xl transition-all duration-200 group" title="New Chat" aria-label="Start new conversation">
             <span className="material-symbols-outlined text-lg text-outline group-hover:text-on-surface transition-colors">edit_square</span>
           </button>
 
@@ -579,55 +625,7 @@ export default function ChatPage() {
 
             {/* Input bar — inside the empty state, pinned right below suggestions */}
             <div className="absolute left-0 right-0 bottom-0 px-3 sm:px-6 py-4 bg-gradient-to-t from-[#10141a] to-transparent z-20 w-full">
-              <div className="max-w-3xl mx-auto">
-                <div className="bg-[#131924]/80 backdrop-blur-xl border border-outline-variant/20 p-1.5 sm:p-2 rounded-2xl flex items-end gap-2 focus-within:border-primary/40 transition-all duration-300 shadow-xl">
-                  <textarea
-                    ref={inputRef}
-                    className="flex-grow bg-transparent border-none focus:outline-none focus:ring-0 text-on-surface placeholder:text-outline/50 text-sm resize-none min-h-[44px] max-h-[160px] py-2.5 px-3 custom-scrollbar overflow-y-auto"
-                    placeholder="Ask a question about your documents…"
-                    value={input}
-                    rows={1}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    onChange={(e) => {
-                      setInput(e.target.value);
-                      e.target.style.height = 'auto';
-                      e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
-                    }}
-                  />
-                  <button
-                    className="bg-primary text-on-primary-fixed p-2.5 rounded-xl transition-all duration-200 hover:shadow-[0_0_16px_rgba(181,196,255,0.4)] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-                    onClick={handleSend}
-                    disabled={loading || !input.trim() || (usageData ? usageData.remaining <= 0 : false)}
-                  >
-                    <span className="material-symbols-outlined text-lg">{loading ? 'hourglass_top' : 'arrow_upward'}</span>
-                  </button>
-                </div>
-                {usageData && (
-                  <div className="flex justify-between items-center mt-2 mx-2">
-                    <p className={`text-[10px] font-bold ${usageData.remaining === 0 ? 'text-error' : usageData.remaining <= 5 ? 'text-error/80' : usageData.remaining <= 10 ? 'text-[var(--md-sys-color-tertiary)]' : 'text-primary/70'}`}>
-                      {usageData.remaining === 0 ? 'Daily limit reached' : usageData.remaining <= 5 ? 'Only a few requests left' : usageData.remaining <= 10 ? 'Approaching usage limit' : 'AI Usage'}
-                    </p>
-                    <div className="flex items-center gap-4 text-[10px] text-outline/60">
-                      <span>{usageData.remaining} / {usageData.limit} remaining</span>
-                      <span>Resets in: {calculateResetTime(usageData.reset_at)}</span>
-                      <span className="hidden sm:inline">Plan: {usageData.plan}</span>
-                    </div>
-                  </div>
-                )}
-                {usageData && usageData.remaining === 0 && (
-                  <p className="text-xs text-error mt-2 text-center bg-error/10 p-2 rounded-lg border border-error/20">
-                    You reached your daily AI limit. Please wait until the next reset.
-                  </p>
-                )}
-                <p className="text-[10px] text-outline/40 text-center mt-2 hidden sm:block">
-                  Press Enter to send · Shift+Enter for new line · Responses are grounded in your uploaded documents
-                </p>
-              </div>
+              <ChatInput input={input} setInput={setInput} loading={loading} onSend={handleSend} />
             </div>
           </div>
         ) : (
@@ -702,6 +700,7 @@ export default function ChatPage() {
                       <button
                         onClick={() => copyMessage(msg.text, i)}
                         className="absolute -bottom-3 right-3 opacity-0 group-hover/msg:opacity-100 p-1.5 bg-[#1c2330] border border-outline-variant/20 rounded-lg transition-all duration-200 hover:bg-surface-container-highest shadow-lg"
+                        aria-label="Copy message"
                       >
                         <span className="material-symbols-outlined text-[14px] text-outline">
                           {copiedIdx === i ? 'check' : 'content_copy'}
@@ -739,55 +738,7 @@ export default function ChatPage() {
 
             {/* Input bar — pinned to bottom when messages exist */}
             <div className="absolute left-0 right-0 bottom-0 px-3 sm:px-6 py-4 border-t border-outline-variant/10 bg-[#10141a]/95 backdrop-blur-xl z-20 w-full shadow-[0_-10px_30px_rgba(16,20,26,0.8)]">
-              <div className="max-w-3xl mx-auto">
-                <div className="bg-[#131924]/85 backdrop-blur-xl border border-outline-variant/20 p-1.5 sm:p-2 rounded-2xl flex items-end gap-2 focus-within:border-primary/40 transition-all duration-300 shadow-lg">
-                  <textarea
-                    ref={inputRef}
-                    className="flex-grow bg-transparent border-none focus:outline-none focus:ring-0 text-on-surface placeholder:text-outline/50 text-sm resize-none min-h-[44px] max-h-[160px] py-2.5 px-3 custom-scrollbar overflow-y-auto"
-                    placeholder="Ask a question about your documents…"
-                    value={input}
-                    rows={1}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    onChange={(e) => {
-                      setInput(e.target.value);
-                      e.target.style.height = 'auto';
-                      e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
-                    }}
-                  />
-                  <button
-                    className="bg-primary text-on-primary-fixed p-2.5 rounded-xl transition-all duration-200 hover:shadow-[0_0_16px_rgba(181,196,255,0.4)] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-                    onClick={handleSend}
-                    disabled={loading || !input.trim() || (usageData ? usageData.remaining <= 0 : false)}
-                  >
-                    <span className="material-symbols-outlined text-lg">{loading ? 'hourglass_top' : 'arrow_upward'}</span>
-                  </button>
-                </div>
-                {usageData && (
-                  <div className="flex justify-between items-center mt-2 mx-2">
-                    <p className={`text-[10px] font-bold ${usageData.remaining === 0 ? 'text-error' : usageData.remaining <= 5 ? 'text-error/80' : usageData.remaining <= 10 ? 'text-[var(--md-sys-color-tertiary)]' : 'text-primary/70'}`}>
-                      {usageData.remaining === 0 ? 'Daily limit reached' : usageData.remaining <= 5 ? 'Only a few requests left' : usageData.remaining <= 10 ? 'Approaching usage limit' : 'AI Usage'}
-                    </p>
-                    <div className="flex items-center gap-4 text-[10px] text-outline/60">
-                      <span>{usageData.remaining} / {usageData.limit} remaining</span>
-                      <span>Resets in: {calculateResetTime(usageData.reset_at)}</span>
-                      <span className="hidden sm:inline">Plan: {usageData.plan}</span>
-                    </div>
-                  </div>
-                )}
-                {usageData && usageData.remaining === 0 && (
-                  <p className="text-xs text-error mt-2 text-center bg-error/10 p-2 rounded-lg border border-error/20">
-                    You reached your daily AI limit. Please wait until the next reset.
-                  </p>
-                )}
-                <p className="text-[10px] text-outline/40 text-center mt-2 hidden sm:block">
-                  Press Enter to send · Shift+Enter for new line · Responses are grounded in your uploaded documents
-                </p>
-              </div>
+              <ChatInput input={input} setInput={setInput} loading={loading} onSend={handleSend} />
             </div>
           </div>
         )}

@@ -142,14 +142,30 @@ def test_client(tmp_registry, mock_vector_store) -> TestClient:
 # Async HTTPX client for streaming tests
 # ---------------------------------------------------------------------------
 @pytest.fixture()
-async def async_test_client():
+async def async_test_client(tmp_registry, mock_vector_store):
     """Async HTTPX client for testing async streaming endpoints."""
-    from httpx import AsyncClient
+    from unittest.mock import MagicMock
 
+    from httpx import ASGITransport, AsyncClient
+
+    from app.dependencies import get_registry, set_embeddings, set_vector_store
     from app.main import app
 
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    set_vector_store(mock_vector_store)
+    set_embeddings(MagicMock())
+
+    def override_registry():
+        return tmp_registry
+
+    app.dependency_overrides[get_registry] = override_registry
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+    app.dependency_overrides.clear()
+    set_vector_store(None)
+    set_embeddings(None)
 
 
 # ---------------------------------------------------------------------------

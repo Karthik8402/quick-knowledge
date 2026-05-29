@@ -19,7 +19,6 @@ else:
     ChatGroq = _ChatGroq
 
 FALLBACK_ANSWER = "Sorry, I could not find this information in your uploaded documents."
-LEGACY_GOOGLE_EMBEDDING_MODELS: set[str] = set()  # no longer redirect any models
 
 
 def get_embeddings() -> Embeddings:

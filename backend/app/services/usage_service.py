@@ -44,7 +44,7 @@ class UsageService:
             UsageService._write_usage(data)
 
         used = user_data.get("used", 0)
-        limit = 50  # Hardcoded default limit for Free plan, could be configurable later
+        limit = get_settings().daily_usage_limit
         remaining = max(0, limit - used)
         percentage = min(100, int((used / limit) * 100)) if limit > 0 else 100
 
@@ -75,7 +75,7 @@ class UsageService:
             user_data["used"] = 0
             user_data["last_reset"] = today_str
 
-        limit = 50
+        limit = get_settings().daily_usage_limit
         if user_data["used"] >= limit:
             return False
 

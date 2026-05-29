@@ -75,7 +75,7 @@ def _build_chroma_store(embeddings: Embeddings):
                 logger.warning(
                     "ChromaDB initialization collision, retrying in a moment (attempt %d/3): %s",
                     attempt + 1,
-                    e
+                    e,
                 )
                 time.sleep(1.0 + random.random())
             else:
@@ -161,10 +161,8 @@ def retrieve_chunks(
         document_ids or "all",
     )
 
-    docs: list[tuple[Document, float]]
-
-    # ── pgvector retrieval (MMR) ──
-    if store_type == "pgvector":
+    # ── pgvector & ChromaDB retrieval (MMR) ──
+    if store_type in {"pgvector", "chroma"}:
         try:
             raw_docs = vector_store.max_marginal_relevance_search(
                 query=question,
@@ -175,25 +173,7 @@ def retrieve_chunks(
             # MMR doesn't return scores; assign positional scores
             docs = [(doc, round(1.0 - (i * 0.05), 4)) for i, doc in enumerate(raw_docs)]
         except Exception as e:
-            logger.warning("MMR failed for pgvector, falling back to similarity: %s", e)
-            docs = vector_store.similarity_search_with_relevance_scores(
-                query=question,
-                k=top_k,
-                filter=metadata_filter,
-            )
-
-    # ── ChromaDB retrieval (MMR) ──
-    elif store_type == "chroma":
-        try:
-            raw_docs = vector_store.max_marginal_relevance_search(
-                query=question,
-                k=top_k,
-                fetch_k=top_k * 3,
-                filter=metadata_filter,
-            )
-            docs = [(doc, round(1.0 - (i * 0.05), 4)) for i, doc in enumerate(raw_docs)]
-        except Exception as e:
-            logger.warning("MMR failed for chroma, falling back to similarity: %s", e)
+            logger.warning("MMR failed for %s, falling back to similarity: %s", store_type, e)
             docs = vector_store.similarity_search_with_relevance_scores(
                 query=question,
                 k=top_k,

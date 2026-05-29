@@ -41,6 +41,8 @@ class RAGState:
     answer: str = ""
     citation_indices: list[int] = field(default_factory=list)
     fallback: bool = False
+    owner_id: str | None = None
+    document_ids: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +56,8 @@ def retrieve_node(state: RAGState, vector_store: Any) -> RAGState:
         vector_store=vector_store,
         question=state.question,
         top_k=settings.rag_top_k,
+        owner_id=state.owner_id,
+        document_ids=state.document_ids,
     )
 
     state.retrieved_docs = docs
@@ -133,14 +137,19 @@ def generate_node(state: RAGState) -> RAGState:
 # ---------------------------------------------------------------------------
 # Graph executor (synchronous pipeline)
 # ---------------------------------------------------------------------------
-def run_rag_agent(question: str, vector_store: Any) -> RAGState:
+def run_rag_agent(
+    question: str,
+    vector_store: Any,
+    owner_id: str | None = None,
+    document_ids: list[str] | None = None,
+) -> RAGState:
     """Execute the full RAG agent pipeline.
 
     This is a synchronous, sequential execution of the 3 nodes.
     For production LangGraph with async/branching, this can be
     upgraded to use langgraph.graph.StateGraph.
     """
-    state = RAGState(question=question)
+    state = RAGState(question=question, owner_id=owner_id, document_ids=document_ids)
 
     # Step 1: Retrieve
     state = retrieve_node(state, vector_store)

@@ -1,5 +1,5 @@
 import { getAccessToken } from './lib/supabase';
-import type { ChatResponse, ChunksResponse, Citation, DocumentMetadata, Settings, SystemStatus, UploadResult } from './types';
+import type { ChatResponse, ChunksResponse, Citation, DocumentMetadata, Settings, SystemStatus, UploadResult, UsageResponse, SystemConfig } from './types';
 import API_BASE_URL from './config/api';
 
 const GET_CACHE_TTL_MS = 10_000;
@@ -304,20 +304,20 @@ export async function getHealth(): Promise<Record<string, unknown>> {
   }, HEALTH_CACHE_TTL_MS);
 }
 
-export async function getUsage(): Promise<any> {
+export async function getUsage(): Promise<UsageResponse> {
   const response = await authFetch(`${API_BASE_URL}/usage`);
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
     throw new Error(errorData?.detail || errorData?.error || 'Failed to get usage stats');
   }
-  return response.json();
+  return response.json() as Promise<UsageResponse>;
 }
 
-export async function getSystemConfig(): Promise<any> {
+export async function getSystemConfig(): Promise<SystemConfig> {
   const response = await authFetch(`${API_BASE_URL}/system/config`);
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
     throw new Error(errorData?.detail || errorData?.error || 'Failed to get system config');
   }
-  return response.json();
+  return response.json() as Promise<SystemConfig>;
 }
