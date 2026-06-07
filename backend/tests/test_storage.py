@@ -104,13 +104,14 @@ class TestUtilityFunctions:
 
         assert content_hash_from_path(file_a) != content_hash_from_path(file_b)
 
-    def test_create_document_id_returns_first_16_chars(self):
+    def test_create_document_id_returns_first_32_chars(self):
+        """document_id uses 32 hex chars (128-bit) for negligible collision risk."""
         from app.storage import create_document_id
 
-        full_hash = "abcdef1234567890extra_chars_here"
+        full_hash = "abcdef1234567890" * 4  # 64-char SHA256-like string
         doc_id = create_document_id(full_hash)
-        assert doc_id == "abcdef1234567890"
-        assert len(doc_id) == 16
+        assert doc_id == "abcdef1234567890abcdef1234567890"
+        assert len(doc_id) == 32
 
     def test_utc_now_iso_returns_string(self):
         from app.storage import utc_now_iso

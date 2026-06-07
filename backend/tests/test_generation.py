@@ -141,8 +141,11 @@ class TestStreamAnswerWithCitations:
         from app.generation import FALLBACK_ANSWER, stream_answer_with_citations
 
         result = stream_answer_with_citations("test", [])
-        tokens = list(result["tokens"])
+        # StreamResult exposes .tokens (generator) and .get_citations() callable
+        tokens = list(result.tokens)
         assert tokens == [FALLBACK_ANSWER]
+        # get_citations() should return empty list for fallback
+        assert result.get_citations() == []
 
     @patch("app.generation.get_chat_model")
     def test_stream_yields_tokens(self, mock_get_model):
@@ -150,11 +153,11 @@ class TestStreamAnswerWithCitations:
 
         # Mock the streaming response
         mock_chunk1 = MagicMock()
-        mock_chunk1.content = '{"answer":'
+        mock_chunk1.content = "Test answer"
         mock_chunk2 = MagicMock()
-        mock_chunk2.content = ' "streamed",'
+        mock_chunk2.content = " [Source 1]"
         mock_chunk3 = MagicMock()
-        mock_chunk3.content = ' "citation_indices": [1]}'
+        mock_chunk3.content = " more content"
 
         mock_model = MagicMock()
         mock_model.stream.return_value = [mock_chunk1, mock_chunk2, mock_chunk3]
@@ -163,9 +166,14 @@ class TestStreamAnswerWithCitations:
         docs = [(make_document(), 0.9)]
         result = stream_answer_with_citations("question", docs)
 
-        tokens = list(result["tokens"])
+        # IMPORTANT: consume tokens FIRST, then call get_citations()
+        tokens = list(result.tokens)
         assert len(tokens) == 3
-        assert '{"answer":' in tokens[0]
+        assert "Test answer" in tokens[0]
+
+        # After consuming tokens, citations can be resolved
+        citations = result.get_citations()
+        assert 1 in citations  # [Source 1] should be parsed
 
 
 class TestGetSystemPrompt:

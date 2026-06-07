@@ -43,6 +43,7 @@ class RAGState:
     fallback: bool = False
     owner_id: str | None = None
     document_ids: list[str] | None = None
+    history: list[dict] | None = None  # Conversation history for multi-turn context
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +114,7 @@ def generate_node(state: RAGState) -> RAGState:
         state.citation_indices = []
         return state
 
-    generation = answer_with_citations(state.question, state.relevant_docs)
+    generation = answer_with_citations(state.question, state.relevant_docs, history=state.history)
     state.answer = generation.get("answer", FALLBACK_ANSWER)
     state.citation_indices = generation.get("citation_indices", [])
 
@@ -142,6 +143,7 @@ def run_rag_agent(
     vector_store: Any,
     owner_id: str | None = None,
     document_ids: list[str] | None = None,
+    history: list[dict] | None = None,
 ) -> RAGState:
     """Execute the full RAG agent pipeline.
 
@@ -149,7 +151,12 @@ def run_rag_agent(
     For production LangGraph with async/branching, this can be
     upgraded to use langgraph.graph.StateGraph.
     """
-    state = RAGState(question=question, owner_id=owner_id, document_ids=document_ids)
+    state = RAGState(
+        question=question,
+        owner_id=owner_id,
+        document_ids=document_ids,
+        history=history,
+    )
 
     # Step 1: Retrieve
     state = retrieve_node(state, vector_store)

@@ -121,7 +121,16 @@ def _validate_production_env(settings) -> None:
         logger.error(error_msg)
         raise ValueError(error_msg)
 
+    # ── Security guard: warn loudly if Supabase is used without auth ──
+    if settings.storage_backend == "supabase" and not settings.auth_enabled:
+        logger.error(
+            "⚠️  SECURITY WARNING: AUTH_ENABLED=false with storage_backend=supabase — "
+            "all user data is accessible without authentication (owner_id defaults to "
+            "'anonymous' for every request). Set AUTH_ENABLED=true in production!"
+        )
+
     logger.info("Environment validation passed")
+
 
 
 # ---------------------------------------------------------------------------

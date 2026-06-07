@@ -15,13 +15,24 @@ logger = logging.getLogger(__name__)
 
 
 class ChatService:
-    # Prompt injection patterns (basic guardrails)
+    # Prompt injection patterns — basic guardrails against adversarial inputs.
+    # NOTE: these catch common patterns but are not a complete defence.
+    # Unicode homoglyph and indirect injection via document content require
+    # an LLM-based guardrail (e.g. Llama Guard) for full protection.
     _INJECTION_PATTERNS = [
+        # Original 5
         re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.IGNORECASE),
         re.compile(r"you\s+are\s+now\s+(a|an)\s+", re.IGNORECASE),
         re.compile(r"system\s*:\s*", re.IGNORECASE),
         re.compile(r"<\|?(system|im_start|endoftext)\|?>", re.IGNORECASE),
         re.compile(r"ADMIN\s*MODE", re.IGNORECASE),
+        # Additional patterns
+        re.compile(r"disregard\s+(all\s+)?(previous|prior)", re.IGNORECASE),
+        re.compile(r"forget\s+(all\s+)?(?:previous|prior|earlier)", re.IGNORECASE),
+        re.compile(r"act\s+as\s+(?:a|an)\s+", re.IGNORECASE),
+        re.compile(r"new\s+instructions?\s*:", re.IGNORECASE),
+        # Unicode fullwidth Latin homoglyph attack (e.g. ｉｇｎｏｒｅ)
+        re.compile(r"[\uff41-\uff5a\uff21-\uff3a]"),
     ]
 
     @classmethod
@@ -53,18 +64,40 @@ class ChatService:
 
     @staticmethod
     def _infer_document_filter(question: str, reg, owner_id: str) -> list[str] | None:
-        """Infer document filter from the question (e.g., resume/cv)."""
+        """Infer document filter from question text and available document filenames.
+
+        Matches if any keyword appears in:
+          1. The user's question (lowercased), OR
+          2. Any document filename owned by the user (lowercased).
+
+        This ensures 'explain the refund policy' still routes correctly when
+        the document is named 'refund_policy_2025.pdf' even if 'policy' is
+        not mentioned by the user.
+        """
+        _KEYWORDS = (
+            "resume", "cv", "policy", "report", "invoice",
+            "contract", "manual", "spec", "whitepaper",
+        )
         q = question.lower()
-        if not any(term in q for term in ("resume", "cv")):
-            return None
+        question_keywords = {kw for kw in _KEYWORDS if kw in q}
 
         docs = reg.list_documents(owner_id=owner_id) or []
-        matched = [
-            doc.get("document_id")
-            for doc in docs
-            if "resume" in (doc.get("file_name") or "").lower()
-        ]
-        return [doc_id for doc_id in matched if doc_id] or None
+
+        matched: list[str] = []
+        for doc in docs:
+            fname = (doc.get("file_name") or "").lower()
+            doc_id = doc.get("document_id")
+            if not doc_id:
+                continue
+            # Match if keyword appears in question OR in the document's filename.
+            if any(kw in fname for kw in _KEYWORDS) and (
+                any(kw in q for kw in _KEYWORDS)
+                or any(kw in fname for kw in question_keywords)
+                or any(kw in fname for kw in _KEYWORDS)
+            ):
+                matched.append(doc_id)
+
+        return matched or None
 
     @staticmethod
     def build_chat_response(
@@ -73,6 +106,7 @@ class ChatService:
         reg,
         owner_id: str,
         document_ids: list[str] | None = None,
+        history: list[dict] | None = None,
     ) -> ChatResponse:
         """Core chat logic shared by standard endpoint."""
         if reg.count(owner_id=owner_id) == 0 or vector_store is None:
@@ -96,6 +130,7 @@ class ChatService:
             vector_store=vector_store,
             owner_id=owner_id,
             document_ids=inferred_doc_ids,
+            history=history,
         )
 
         answer_text = state.answer
@@ -162,6 +197,7 @@ class ChatService:
         reg,
         owner_id: str,
         document_ids: list[str] | None = None,
+        history: list[dict] | None = None,
     ):
         if reg.count(owner_id=owner_id) == 0 or vector_store is None:
             fallback = (
@@ -217,24 +253,33 @@ class ChatService:
         try:
             started = time.perf_counter()
             streamed_chars = 0
-            result = stream_answer_with_citations(question, state.relevant_docs)
-            for token in result["tokens"]:
+            result = stream_answer_with_citations(question, state.relevant_docs, history=history)
+
+            # ── Consume tokens FIRST, THEN resolve citations ──
+            # StreamResult.get_citations() is a deferred resolver that parses
+            # the full collected buffer.  It returns [] if called before the
+            # generator is exhausted — so this order is critical.
+            for token in result.tokens:
                 streamed_chars += len(token)
                 yield {"event": "token", "data": token}
 
             if streamed_chars == 0:
                 logger.warning("LLM stream returned 0 chars; falling back to non-stream response")
-                fallback_generation = answer_with_citations(question, state.relevant_docs)
+                fallback_generation = answer_with_citations(question, state.relevant_docs, history=history)
                 fallback_answer = fallback_generation.get("answer", FALLBACK_ANSWER)
                 if fallback_answer == FALLBACK_ANSWER and state.relevant_docs:
                     fallback_answer = ChatService._extractive_fallback(state.relevant_docs)
                 yield {"event": "token", "data": fallback_answer}
-                result = fallback_generation
                 streamed_chars = len(fallback_answer)
+                safe_indices = validate_citation_indices(
+                    fallback_generation.get("citation_indices", []), len(state.relevant_docs)
+                )
+            else:
+                # Generator fully consumed — now safe to call get_citations()
+                safe_indices = validate_citation_indices(
+                    result.get_citations(), len(state.relevant_docs)
+                )
 
-            safe_indices = validate_citation_indices(
-                result.get("citation_indices", []), len(state.relevant_docs)
-            )
             if not safe_indices and state.relevant_docs:
                 safe_indices = [1]
                 logger.info("LLM stream response: no citations found, defaulting to Source 1")

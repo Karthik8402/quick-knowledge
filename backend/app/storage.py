@@ -196,7 +196,13 @@ def content_hash_from_bytes(data: bytes) -> str:
 
 
 def create_document_id(content_hash: str) -> str:
-    return content_hash[:16]
+    """Create a document ID from a SHA256 content hash.
+
+    Uses the first 32 hex characters (128-bit) for negligible collision risk.
+    Previously [:16] (64-bit) — changed to [:32] for safety as the KB grows.
+    Note: only affects newly ingested documents; existing IDs are unchanged.
+    """
+    return content_hash[:32]
 
 
 def utc_now_iso() -> str:

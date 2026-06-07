@@ -24,6 +24,12 @@ export type Citation = {
   snippet: string;
 };
 
+/** A single turn in a conversation history. */
+export type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
 export type RetrievedChunk = {
   document_id: string;
   file_name: string;

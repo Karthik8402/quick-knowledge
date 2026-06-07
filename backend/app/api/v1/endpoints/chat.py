@@ -43,7 +43,8 @@ def chat(
         )
 
     return ChatService.build_chat_response(
-        body.question, vector_store, reg, user.user_id, body.document_ids
+        body.question, vector_store, reg, user.user_id, body.document_ids,
+        history=body.history,
     )
 
 
@@ -76,6 +77,7 @@ async def chat_stream(
 
     return EventSourceResponse(
         ChatService.chat_stream_generator(
-            body.question, vector_store, reg, user.user_id, body.document_ids
+            body.question, vector_store, reg, user.user_id, body.document_ids,
+            history=body.history,
         )
     )

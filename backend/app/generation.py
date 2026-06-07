@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from dataclasses import dataclass, field
+from functools import lru_cache
+from typing import Any, Callable, Generator, cast
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import SecretStr
@@ -19,6 +21,30 @@ else:
     ChatGroq = _ChatGroq
 
 FALLBACK_ANSWER = "Sorry, I could not find this information in your uploaded documents."
+
+
+# ---------------------------------------------------------------------------
+# StreamResult — replaces the fragile LazyResult(dict) pattern
+# ---------------------------------------------------------------------------
+@dataclass
+class StreamResult:
+    """Holds a streaming token generator and a deferred citation resolver.
+
+    IMPORTANT: call get_citations() ONLY after the tokens generator has been
+    fully consumed (i.e. all tokens have been yielded).  Accessing it early
+    returns an empty list because the collected buffer will be empty.
+    """
+
+    tokens: Generator
+    get_citations: Callable[[], list[int]]
+    _extra: dict = field(default_factory=dict)
+
+    # Allow dict-style .get() for backward compat with any stray callers.
+    def get(self, key: str, default: Any = None) -> Any:
+        if key == "citation_indices":
+            return self.get_citations()
+        return self._extra.get(key, default)
+
 
 
 def get_embeddings() -> Embeddings:
@@ -42,7 +68,14 @@ def get_embeddings() -> Embeddings:
     raise ValueError(f"Unsupported embedding provider: {settings.embedding_provider}")
 
 
+@lru_cache(maxsize=1)
 def get_chat_model():
+    """Return the configured LangChain chat model.
+
+    Cached per process with @lru_cache.  If LLM_PROVIDER or API keys are
+    changed at runtime, a server restart is required to pick up the new values.
+    This is intentional — model clients are not safely hot-swappable.
+    """
     settings = get_settings()
 
     if settings.llm_provider.lower() == "google":
@@ -123,7 +156,18 @@ def _get_system_prompt() -> str:
     )
 
 
-def _build_messages(question: str, context: str) -> list:
+def _build_messages(
+    question: str,
+    context: str,
+    history: list[dict] | None = None,
+) -> list:
+    """Build the LangChain message list for the LLM.
+
+    Message order:
+        SystemMessage  (instructions)
+        [HumanMessage / AIMessage pairs from history — oldest first]
+        HumanMessage   (current question + context)
+    """
     settings = get_settings()
     system_text = _get_system_prompt()
     human_text = f"Question: {question}\n\nContext:\n{context}"
@@ -136,8 +180,21 @@ def _build_messages(question: str, context: str) -> list:
         # Some Gemma endpoints reject developer/system instructions.
         gemma_prompt = f"Instructions:\n{system_text}\n\nQuestion and Context:\n{human_text}"
         return [HumanMessage(content=gemma_prompt)]
-    else:
-        return [SystemMessage(content=system_text), HumanMessage(content=human_text)]
+
+    messages: list = [SystemMessage(content=system_text)]
+
+    # Prepend conversation history (up to 20 turns, validated by ChatRequest schema).
+    if history:
+        for turn in history:
+            role = turn.get("role", "")
+            content = turn.get("content", "")
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                messages.append(AIMessage(content=content))
+
+    messages.append(HumanMessage(content=human_text))
+    return messages
 
 
 def _parse_llm_response(content: str) -> dict[str, Any]:
@@ -176,7 +233,9 @@ def _extract_text(content: Any) -> str:
 
 
 def answer_with_citations(
-    question: str, retrieved_docs: list[tuple[Document, float]]
+    question: str,
+    retrieved_docs: list[tuple[Document, float]],
+    history: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Standard (non-streaming) answer generation."""
     if not retrieved_docs:
@@ -184,7 +243,7 @@ def answer_with_citations(
 
     llm = get_chat_model()
     context = build_context(retrieved_docs)
-    messages = _build_messages(question, context)
+    messages = _build_messages(question, context, history=history)
 
     try:
         response = llm.invoke(messages)
@@ -196,22 +255,30 @@ def answer_with_citations(
 
 
 def stream_answer_with_citations(
-    question: str, retrieved_docs: list[tuple[Document, float]]
-) -> dict[str, Any]:
+    question: str,
+    retrieved_docs: list[tuple[Document, float]],
+    history: list[dict] | None = None,
+) -> StreamResult:
     """
     Streaming answer generation.
-    Returns dict with:
-      - "tokens": generator yielding string tokens
-      - "citation_indices": list (populated after streaming completes)
+
+    Returns a StreamResult with:
+      - tokens: generator yielding string tokens (consume this first!)
+      - get_citations(): callable that parses citations from the collected
+        buffer — call it ONLY after `tokens` is fully consumed.
     """
     if not retrieved_docs:
-        return {"tokens": iter([FALLBACK_ANSWER]), "citation_indices": []}
+
+        def _empty_gen():
+            yield FALLBACK_ANSWER
+
+        return StreamResult(tokens=_empty_gen(), get_citations=lambda: [])
 
     llm = get_chat_model()
     context = build_context(retrieved_docs)
-    messages = _build_messages(question, context)
+    messages = _build_messages(question, context, history=history)
 
-    collected = []
+    collected: list[str] = []
 
     def token_generator():
         try:
@@ -223,23 +290,15 @@ def stream_answer_with_citations(
         except Exception:
             yield FALLBACK_ANSWER
 
-    tokens = token_generator()
+    def get_citations() -> list[int]:
+        """Parse citation indices from the fully-collected stream buffer.
 
-    result: dict[str, Any] = {"tokens": tokens, "citation_indices": []}
+        Must be called AFTER the tokens generator is exhausted.
+        """
+        if not collected:
+            return []
+        full_text = "".join(collected)
+        parsed = _parse_llm_response(full_text)
+        return parsed.get("citation_indices", [])
 
-    class LazyResult(dict):
-        def __getitem__(self, key):
-            if key == "citation_indices" and collected:
-                full_text = "".join(collected)
-                parsed = _parse_llm_response(full_text)
-                self["citation_indices"] = parsed.get("citation_indices", [])
-            return super().__getitem__(key)
-
-        def get(self, key, default=None):
-            if key == "citation_indices" and collected:
-                full_text = "".join(collected)
-                parsed = _parse_llm_response(full_text)
-                self["citation_indices"] = parsed.get("citation_indices", [])
-            return super().get(key, default)
-
-    return LazyResult(result)
+    return StreamResult(tokens=token_generator(), get_citations=get_citations)

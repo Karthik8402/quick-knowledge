@@ -24,12 +24,40 @@ class RetrievedChunk(BaseModel):
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     document_ids: list[str] | None = None
+    history: list[dict] | None = None
 
     @field_validator("question")
     @classmethod
     def sanitize_question(cls, v: str) -> str:
         """Strip leading/trailing whitespace and null bytes."""
         return v.strip().replace("\x00", "")
+
+    @field_validator("history")
+    @classmethod
+    def validate_history(cls, v: list[dict] | None) -> list[dict] | None:
+        """Validate conversation history structure.
+
+        Rules:
+          - Maximum 20 turns (prevents prompt stuffing).
+          - Each turn must have role 'user' or 'assistant'.
+          - Each turn must have a non-empty string content.
+        """
+        if v is None:
+            return v
+        if len(v) > 20:
+            raise ValueError("History cannot exceed 20 turns")
+        for i, turn in enumerate(v):
+            role = turn.get("role")
+            content = turn.get("content")
+            if role not in ("user", "assistant"):
+                raise ValueError(
+                    f"History turn {i}: 'role' must be 'user' or 'assistant', got {role!r}"
+                )
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError(
+                    f"History turn {i}: 'content' must be a non-empty string"
+                )
+        return v
 
 
 class ChatResponse(BaseModel):

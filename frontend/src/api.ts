@@ -1,5 +1,5 @@
 import { getAccessToken } from './lib/supabase';
-import type { ChatResponse, ChunksResponse, Citation, DocumentMetadata, Settings, SystemStatus, UploadResult, UsageResponse, SystemConfig } from './types';
+import type { ChatMessage, ChatResponse, ChunksResponse, Citation, DocumentMetadata, Settings, SystemStatus, UploadResult, UsageResponse, SystemConfig } from './types';
 import API_BASE_URL from './config/api';
 
 const GET_CACHE_TTL_MS = 10_000;
@@ -116,11 +116,19 @@ export async function deleteDocument(documentId: string): Promise<void> {
   clearApiCache();
 }
 
-export async function chat(question: string, documentIds?: string[]): Promise<ChatResponse> {
+export async function chat(
+  question: string,
+  documentIds?: string[],
+  history?: ChatMessage[],
+): Promise<ChatResponse> {
   const response = await authFetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, document_ids: documentIds?.length ? documentIds : null }),
+    body: JSON.stringify({
+      question,
+      document_ids: documentIds?.length ? documentIds : null,
+      history: history?.length ? history : null,
+    }),
   });
 
   if (!response.ok) {
@@ -142,6 +150,7 @@ export async function chatStream(
   onCitations: (citations: Citation[]) => void,
   onDone: () => void,
   onError: (error: string) => void,
+  history?: ChatMessage[],
 ): Promise<void> {
   const token = await getAccessToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -150,7 +159,11 @@ export async function chatStream(
   const response = await fetch(`${API_BASE_URL}/chat/stream`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ question, document_ids: documentIds?.length ? documentIds : null }),
+    body: JSON.stringify({
+      question,
+      document_ids: documentIds?.length ? documentIds : null,
+      history: history?.length ? history : null,
+    }),
   });
 
   if (!response.ok) {

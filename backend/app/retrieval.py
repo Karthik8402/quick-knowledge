@@ -146,6 +146,16 @@ def retrieve_chunks(
 
     Returns:
         List of (Document, score) tuples sorted by relevance.
+
+    MMR Score Warning
+    -----------------
+    MMR search does not return real relevance scores. The scores assigned here
+    are **synthetic positional values** (1.0, 0.95, 0.90, ...) and will ALWAYS
+    pass the 0.3 grade threshold in grade_node. The relevance gate is therefore
+    only meaningful when the similarity fallback path is used (e.g. on MMR
+    failure). This is a known limitation of LangChain's MMR API.
+    Use pgvector or Chroma; FAISS is NOT recommended for multi-tenant production
+    (see FAISS path below for details).
     """
     settings = get_settings()
     store_type = settings.vector_store.lower()
@@ -180,13 +190,26 @@ def retrieve_chunks(
                 filter=metadata_filter,
             )
 
-    # ── FAISS fallback (no metadata filtering support) ──
+    # ── FAISS fallback (no native metadata filtering support) ──
     else:
-        raw = vector_store.similarity_search_with_score(query=question, k=top_k)
+        # FAISS does not support server-side metadata filtering, so we must
+        # over-fetch and filter in Python.  Fetching top_k alone means a user's
+        # documents may never appear if other users' docs dominate the top-k.
+        # Fetching top_k * 10 (capped at 100) gives reasonable recall before
+        # the owner filter is applied.
+        # ⚠️  FAISS is NOT recommended for multi-tenant production — use
+        # pgvector or Chroma which support native metadata filters.
+        faiss_fetch_k = min(top_k * 10, 100)
+        raw = vector_store.similarity_search_with_score(query=question, k=faiss_fetch_k)
         docs = [(doc, float(score)) for doc, score in raw]
-        # Manual owner_id filtering for FAISS
         if owner_id and owner_id != "anonymous":
-            docs = [(doc, score) for doc, score in docs if doc.metadata.get("owner_id") == owner_id]
+            docs = [
+                (doc, score)
+                for doc, score in docs
+                if doc.metadata.get("owner_id") == owner_id
+            ]
+        # Trim to top_k after filtering
+        docs = docs[:top_k]
 
     elapsed_ms = int((time.perf_counter() - started) * 1000)
 

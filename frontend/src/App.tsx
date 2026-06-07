@@ -19,6 +19,7 @@ import ForgotPasswordPage from './features/auth/ForgotPassword';
 import ResetPasswordPage from './features/auth/ResetPassword';
 import AuthCallbackPage from './features/auth/AuthCallback';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 
 const AUTH_ENABLED = authEnabled;
 
@@ -61,24 +62,26 @@ function ProtectedRoute() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Toaster position="top-center" toastOptions={{ 
-        style: { background: '#18181b', color: '#f4f4f5', border: '1px solid #27272a' }
-      }} />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route path="/*" element={<DashboardRoutes />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Toaster position="top-center" toastOptions={{ 
+          style: { background: '#18181b', color: '#f4f4f5', border: '1px solid #27272a' }
+        }} />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="/*" element={<DashboardRoutes />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
