@@ -10,11 +10,14 @@ Threading model:
 
 from datetime import UTC, datetime, timedelta
 import json
+import logging
 from pathlib import Path
 import threading
 from typing import Any
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 # Module-level lock — protects file I/O in local (single-process) mode.
 _usage_lock = threading.Lock()
@@ -52,18 +55,21 @@ class UsageService:
         """Read today's usage row from Supabase."""
         from app.core.supabase import get_supabase_client
 
-        client = get_supabase_client()
         today_str = datetime.now(UTC).strftime("%Y-%m-%d")
-        result = (
-            client.table("usage")
-            .select("used")
-            .eq("user_id", user_id)
-            .eq("date", today_str)
-            .limit(1)
-            .execute()
-        )
-        if result.data:
-            return {"used": result.data[0]["used"], "last_reset": today_str}
+        try:
+            client = get_supabase_client()
+            result = (
+                client.table("usage")
+                .select("used")
+                .eq("user_id", user_id)
+                .eq("date", today_str)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                return {"used": result.data[0]["used"], "last_reset": today_str}
+        except Exception as e:
+            logger.error("Failed to read usage from Supabase: %s. Falling back to 0.", e)
         return {"used": 0, "last_reset": today_str}
 
     @staticmethod
@@ -78,43 +84,47 @@ class UsageService:
         """
         from app.core.supabase import get_supabase_client
 
-        client = get_supabase_client()
         today_str = datetime.now(UTC).strftime("%Y-%m-%d")
-
-        # Upsert: insert row with used=1, or increment existing row atomically.
-        (
-            client.table("usage")
-            .upsert(
+        
+        try:
+            client = get_supabase_client()
+            # Upsert: insert row with used=1, or increment existing row atomically.
+            client.table("usage").upsert(
                 {"user_id": user_id, "date": today_str, "used": 1},
                 on_conflict="user_id,date",
-                # Supabase postgrest supports ignoreDuplicates=False to trigger DO UPDATE.
-                # We rely on the SQL expression via the 'count' trick below.
-            )
-            .execute()
-        )
+            ).execute()
+        except Exception as e:
+            logger.error("Failed to upsert usage in Supabase: %s", e)
 
         # postgrest-py doesn't expose DO UPDATE expressions directly.
         # Use rpc() for the true atomic increment instead.
         try:
+            client = get_supabase_client()
             rpc_result = client.rpc(
                 "increment_usage",
                 {"p_user_id": user_id, "p_date": today_str},
             ).execute()
             if rpc_result.data is not None:
                 return int(rpc_result.data)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("RPC increment_usage failed: %s. Falling back to read.", e)
 
         # Fallback: read back the current value after the upsert.
-        read = (
-            client.table("usage")
-            .select("used")
-            .eq("user_id", user_id)
-            .eq("date", today_str)
-            .limit(1)
-            .execute()
-        )
-        return read.data[0]["used"] if read.data else 1
+        try:
+            client = get_supabase_client()
+            read = (
+                client.table("usage")
+                .select("used")
+                .eq("user_id", user_id)
+                .eq("date", today_str)
+                .limit(1)
+                .execute()
+            )
+            if read.data:
+                return read.data[0]["used"]
+        except Exception as e:
+            logger.error("Failed fallback read of usage in Supabase: %s", e)
+        return 1
 
     # ------------------------------------------------------------------ #
     # Public API                                                           #

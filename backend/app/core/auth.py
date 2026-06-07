@@ -48,6 +48,16 @@ def _decode_kwargs(algorithms: list[str]) -> dict[str, Any]:
     return kwargs
 
 
+def _make_user_context(user_id: str, email: str, raw_role: str) -> UserContext:
+    settings = get_settings()
+    role = raw_role
+    if settings.admin_emails:
+        admins = [e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()]
+        if email.strip().lower() in admins:
+            role = "admin"
+    return UserContext(user_id=user_id, email=email, role=role)
+
+
 def _user_from_payload(payload: dict[str, Any]) -> UserContext:
     user_id = str(payload.get("sub") or payload.get("id") or "")
     email = str(payload.get("email") or "")
@@ -59,7 +69,7 @@ def _user_from_payload(payload: dict[str, Any]) -> UserContext:
             detail="Token missing user identity (sub)",
         )
 
-    return UserContext(user_id=user_id, email=email, role=role)
+    return _make_user_context(user_id=user_id, email=email, raw_role=role)
 
 
 def _cache_expiry_for_token(token: str) -> float:
@@ -207,10 +217,10 @@ async def _verify_with_supabase_auth(token: str) -> UserContext:
                 detail="Supabase Auth response missing user id",
             )
 
-        return UserContext(
+        return _make_user_context(
             user_id=user_id,
             email=str(data.get("email") or ""),
-            role=str(data.get("role") or data.get("aud") or "authenticated"),
+            raw_role=str(data.get("role") or data.get("aud") or "authenticated"),
         )
 
     if response.status_code in {401, 403}:

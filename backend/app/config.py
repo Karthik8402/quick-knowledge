@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     # ── Auth ──
     auth_enabled: bool = False  # Set True in production
+    admin_emails: str = ""  # Comma-separated list of admin emails in production
 
     # ── RAG ──
     rag_top_k: int = 6
