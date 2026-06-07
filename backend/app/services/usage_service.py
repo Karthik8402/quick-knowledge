@@ -30,7 +30,7 @@ class UsageService:
     @staticmethod
     def _get_usage_file() -> Path:
         settings = get_settings()
-        data_dir = Path(settings.upload_dir).parent
+        data_dir = Path(settings.sqlite_db_path).parent
         usage_file = data_dir / "usage.json"
         if not usage_file.exists():
             usage_file.write_text("{}")
@@ -87,12 +87,10 @@ class UsageService:
         today_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
         try:
-            client = get_supabase_client()
-            # Upsert: insert row with used=1, or increment existing row atomically.
-            client.table("usage").upsert(
-                {"user_id": user_id, "date": today_str, "used": 1},
-                on_conflict="user_id,date",
-            ).execute()
+            # Removed redundant upsert here to prevent double-writes and race conditions.
+            # The atomic increment relies entirely on the 'increment_usage' RPC.
+            # NOTE: The 'increment_usage' RPC must exist in the Supabase database migrations.
+            pass
         except Exception as e:
             logger.error("Failed to upsert usage in Supabase: %s", e)
 

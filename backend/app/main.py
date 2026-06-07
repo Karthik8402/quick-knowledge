@@ -166,7 +166,7 @@ app.add_middleware(SlowAPIMiddleware)
 # ---------------------------------------------------------------------------
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next) -> Response:
-    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:8])
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     request.state.request_id = request_id
 
     # Set context var for this async task
@@ -190,6 +190,7 @@ async def security_headers_middleware(request: Request, call_next) -> Response:
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "img-src 'self' data: https:; "

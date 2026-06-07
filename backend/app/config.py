@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore", frozen=False)
 
     # ── LLM / Embedding ──
     llm_provider: str = "google"
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     supabase_storage_bucket: str = "documents"
 
     # ── Auth ──
-    auth_enabled: bool = False  # Set True in production
+    auth_enabled: bool = True  # Set True in production
     admin_emails: str = ""  # Comma-separated list of admin emails in production
 
     # ── RAG ──

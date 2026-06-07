@@ -5,6 +5,8 @@ import type { ChatResponse, Citation } from '../../types';
 import ConfirmToast from '../../components/ui/ConfirmToast';
 import { useUsageStore } from '../../services/usage';
 import ChatInput from './components/ChatInput';
+import { useAuth } from '../../hooks/useAuth';
+import DOMPurify from 'dompurify';
 
 /* ──────────────────────────────────────────────
    Types
@@ -24,19 +26,39 @@ type ChatSession = {
    ────────────────────────────────────────────── */
 const STORAGE_KEY = 'qk_chat_sessions';
 
-function loadSessions(): ChatSession[] {
+function loadSessions(userId: string): ChatSession[] {
+  const scopedKey = `qk_chat_sessions_${userId}`;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(scopedKey);
+    if (!raw) {
+      const oldRaw = localStorage.getItem('qk_chat_sessions');
+      if (oldRaw) {
+        localStorage.setItem(scopedKey, oldRaw);
+        localStorage.removeItem('qk_chat_sessions');
+        raw = oldRaw;
+      }
+    }
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
-function saveSessions(sessions: ChatSession[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+function saveSessions(userId: string, sessions: ChatSession[]) {
+  const scopedKey = `qk_chat_sessions_${userId}`;
+  const safeSessions = sessions.map(s => ({
+    ...s,
+    messages: s.messages.map(m => {
+      if (m.data) {
+        const { data, ...safeMsg } = m;
+        return safeMsg;
+      }
+      return m;
+    })
+  }));
+  localStorage.setItem(scopedKey, JSON.stringify(safeSessions));
 }
 
 function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  return crypto.randomUUID();
 }
 
 /* ──────────────────────────────────────────────
@@ -128,7 +150,7 @@ function renderInline(text: string): React.ReactNode {
     if (t.startsWith('`') && t.endsWith('`')) {
       return <code key={i} className="bg-surface-container-highest/80 text-primary px-1.5 py-0.5 rounded text-[11px] font-mono">{t.slice(1, -1)}</code>;
     }
-    return t;
+    return <span key={i}>{t}</span>;
   });
 }
 
@@ -150,7 +172,10 @@ const suggestions = [
 export default function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const docFilter                       = searchParams.get('doc');
-  const [sessions, setSessions]         = useState<ChatSession[]>(loadSessions);
+  const { user }                        = useAuth();
+  const userId                          = user?.id || 'anonymous';
+  const [sessions, setSessions]         = useState<ChatSession[]>([]);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [activeId, setActiveId]         = useState<string | null>(null);
   const [input, setInput]               = useState('');
   const [loading, setLoading]           = useState(false);
@@ -165,17 +190,32 @@ export default function ChatPage() {
   const bottomRef   = useRef<HTMLDivElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
   const scrollPositionsRef = useRef<Record<string, number>>({});
+  const abortRef    = useRef<AbortController | null>(null);
   
-  const { data: usageData, fetchUsageIfStale, decrementRemaining } = useUsageStore();
+  const { data: usageData, fetchUsage, fetchUsageIfStale, decrementRemaining } = useUsageStore();
 
   const activeSession = sessions.find((s) => s.id === activeId) ?? null;
   const messages = activeSession?.messages ?? [];
   const showHistory = isDesktop || historyOpen;
   const filteredSessions = historyQuery
-    ? sessions.filter((s) => s.title.toLowerCase().includes(historyQuery.toLowerCase()))
+    ? sessions.filter((s) => 
+        s.title.toLowerCase().includes(historyQuery.toLowerCase()) ||
+        s.messages[0]?.text.toLowerCase().includes(historyQuery.toLowerCase())
+      )
     : sessions;
 
-  useEffect(() => { saveSessions(sessions); }, [sessions]);
+  useEffect(() => {
+    setSessions(loadSessions(userId));
+    setSessionsLoaded(true);
+  }, [userId]);
+
+  useEffect(() => { 
+    if (sessionsLoaded) saveSessions(userId, sessions); 
+  }, [sessions, userId, sessionsLoaded]);
+
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 640px)');
@@ -282,6 +322,7 @@ export default function ChatPage() {
 
   const deleteSession = useCallback((id: string) => {
     setSessions((prev) => prev.filter((s) => s.id !== id));
+    delete scrollPositionsRef.current[id];
     if (activeId === id) setActiveId(null);
   }, [activeId]);
 
@@ -340,11 +381,15 @@ export default function ChatPage() {
 
     setLoading(true);
     setShouldStickToBottom(true);
+    
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
 
     let streamedText = '';
     let streamCitations: Citation[] = [];
 
     const documentIds = docFilter ? [docFilter] : undefined;
+    const historyParam = (activeSession?.messages || []).map(m => ({ role: m.role, content: m.text }));
 
     try {
       await chatStream(
@@ -377,22 +422,24 @@ export default function ChatPage() {
         async (error) => {
           console.warn('Stream failed, falling back to standard chat:', error);
           try {
-            const res = await chat(q, documentIds);
+            const res = await chat(q, documentIds, historyParam);
             finalizeSessionMessage(sessionId!, res.answer, res);
-            decrementRemaining();
+            void fetchUsage();
           } catch (e2: any) {
             finalizeSessionMessage(sessionId!, `Error: ${e2.message}`);
           } finally {
             setLoading(false);
           }
         },
+        historyParam,
+        abortRef.current.signal
       );
     } catch (e: any) {
       // Network-level failure — fall back to standard chat
       try {
-        const res = await chat(q, documentIds);
+        const res = await chat(q, documentIds, historyParam);
         finalizeSessionMessage(sessionId!, res.answer, res);
-        decrementRemaining();
+        void fetchUsage();
       } catch (e2: any) {
         finalizeSessionMessage(sessionId!, `Error: ${e2.message}`);
       } finally {
@@ -429,7 +476,7 @@ export default function ChatPage() {
     if (diff < 60_000) return 'Just now';
     if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`;
     if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`;
-    return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
   const calculateResetTime = (resetDate: string) => {
@@ -443,16 +490,18 @@ export default function ChatPage() {
   /* ──────────────────────────────────────────── */
   return (
     <div className="flex h-full w-full min-h-0">
-      <ConfirmToast
-        open={Boolean(pendingSessionDelete)}
-        title="Delete conversation?"
-        message={pendingSessionDelete ? `"${pendingSessionDelete.title}" will be removed from your local history.` : ''}
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
-        onConfirm={confirmDeleteSession}
-        onCancel={() => setPendingSessionDelete(null)}
-        tone="danger"
-      />
+      {pendingSessionDelete && (
+        <ConfirmToast
+          open={true}
+          title="Delete conversation?"
+          message={`"${pendingSessionDelete.title}" will be removed from your local history.`}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onConfirm={confirmDeleteSession}
+          onCancel={() => setPendingSessionDelete(null)}
+          tone="danger"
+        />
+      )}
 
       {/* ══════════ History overlay (mobile) ══════════ */}
       {historyOpen && !isDesktop && (
@@ -687,7 +736,7 @@ export default function ChatPage() {
                                   </span>
                                   <div className="absolute bottom-full left-0 mb-2 w-72 p-4 bg-[#1a1f26] rounded-xl hidden group-hover/cite:block z-50 text-xs shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] border border-outline-variant/20 animate-fade-in-down">
                                     <p className="text-[11px] text-primary font-bold mb-2 break-all">{cite.file_name}{cite.page ? ` — Page ${cite.page}` : ''}</p>
-                                    <p className="text-on-surface-variant/90 leading-relaxed max-h-40 overflow-y-auto custom-scrollbar italic">"{cite.snippet}"</p>
+                                    <p className="text-on-surface-variant/90 leading-relaxed max-h-40 overflow-y-auto custom-scrollbar italic">"{DOMPurify.sanitize(cite.snippet)}"</p>
                                   </div>
                                 </div>
                               ))}

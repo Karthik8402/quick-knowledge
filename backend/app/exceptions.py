@@ -54,3 +54,10 @@ class NoFilesUploadedError(KnowledgeBaseError):
 
     def __init__(self) -> None:
         super().__init__("No files uploaded", status_code=400)
+
+
+class StorageUnavailableError(KnowledgeBaseError):
+    """Raised when the storage backend is unavailable."""
+
+    def __init__(self, message: str = "Storage temporarily unavailable.") -> None:
+        super().__init__(message, status_code=503)

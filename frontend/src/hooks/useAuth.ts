@@ -134,7 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // ── Secure session cleanup ──
     clearApiCache();
-    localStorage.clear();
+    const keysToRemove = Object.keys(localStorage).filter(k => k.startsWith('qk_'));
+    keysToRemove.forEach(k => localStorage.removeItem(k));
     sessionStorage.clear();
     // Reset auth state immediately
     setState({ user: null, session: null, loading: false });

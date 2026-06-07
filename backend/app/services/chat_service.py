@@ -93,7 +93,6 @@ class ChatService:
             if any(kw in fname for kw in _KEYWORDS) and (
                 any(kw in q for kw in _KEYWORDS)
                 or any(kw in fname for kw in question_keywords)
-                or any(kw in fname for kw in _KEYWORDS)
             ):
                 matched.append(doc_id)
 
@@ -109,6 +108,12 @@ class ChatService:
         history: list[dict] | None = None,
     ) -> ChatResponse:
         """Core chat logic shared by standard endpoint."""
+        from fastapi import HTTPException
+        if history:
+            for turn in history:
+                if turn.get("role") == "user" and ChatService.check_prompt_injection(turn.get("content", "")):
+                    raise HTTPException(status_code=400, detail="Invalid input detected in history")
+
         if reg.count(owner_id=owner_id) == 0 or vector_store is None:
             logger.info("Chat fallback: no documents or vector store unavailable")
             return ChatResponse(
@@ -199,6 +204,12 @@ class ChatService:
         document_ids: list[str] | None = None,
         history: list[dict] | None = None,
     ):
+        if history:
+            for turn in history:
+                if turn.get("role") == "user" and ChatService.check_prompt_injection(turn.get("content", "")):
+                    yield {"event": "error", "data": "Invalid input detected in history"}
+                    return
+
         if reg.count(owner_id=owner_id) == 0 or vector_store is None:
             fallback = (
                 FALLBACK_ANSWER

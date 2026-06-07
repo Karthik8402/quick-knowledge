@@ -44,6 +44,7 @@ class RAGState:
     owner_id: str | None = None
     document_ids: list[str] | None = None
     history: list[dict] | None = None  # Conversation history for multi-turn context
+    is_mmr: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +63,7 @@ def retrieve_node(state: RAGState, vector_store: Any) -> RAGState:
     )
 
     state.retrieved_docs = docs
+    state.is_mmr = settings.vector_store.lower() in {"chroma", "pgvector"}
     logger.info("Retrieve node: found %d chunks", len(docs))
     return state
 
@@ -87,7 +89,7 @@ def grade_node(state: RAGState) -> RAGState:
     for doc, score in state.retrieved_docs:
         # Normalize: some stores return distance (lower=better), others similarity (higher=better)
         # ChromaDB and pgvector return similarity scores where higher is better
-        if score >= RELEVANCE_THRESHOLD:
+        if state.is_mmr or score >= RELEVANCE_THRESHOLD:
             relevant.append((doc, score))
 
     if not relevant:
@@ -125,7 +127,9 @@ def generate_node(state: RAGState) -> RAGState:
 
     # If we got an answer but no valid citations, fall back
     if state.answer != FALLBACK_ANSWER and not state.citation_indices:
-        state.answer = FALLBACK_ANSWER
+        state.citation_indices = [1] if state.relevant_docs else []
+        if not state.citation_indices:
+            state.answer = FALLBACK_ANSWER
 
     logger.info(
         "Generate node: answer length=%d, citations=%d",

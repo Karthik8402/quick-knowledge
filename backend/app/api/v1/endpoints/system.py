@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.config import get_settings
-from app.core.auth import UserContext, get_current_user
+from app.core.auth import UserContext, get_current_user, get_optional_user
 from app.dependencies import (
     get_embeddings_instance,
     get_init_error,
@@ -77,11 +77,6 @@ def health(
         or os.environ.get("GIT_COMMIT")
         or "local",
         "python_version": platform.python_version(),
-        "disk_free_mb": round(disk_free_mb, 2) if disk_free_mb >= 0 else None,
-        "storage_backend": settings.storage_backend,
-        "vector_store": settings.vector_store,
-        "auth_enabled": settings.auth_enabled,
-        "checks": checks,
     }
 
 
@@ -105,14 +100,23 @@ def get_status(
         embeddings_loaded=embeddings is not None,
         documents=doc_count,
         chunks=chunk_count,
+        storage_backend=settings.storage_backend,
+        auth_enabled=settings.auth_enabled,
     )
 
 
 @router.get("/system/config")
-def get_system_config():
+def get_system_config(user: UserContext | None = Depends(get_optional_user)):
     """Get active platform configuration and initialization status."""
     settings = get_settings()
     init_err = get_init_error()
+
+    # Unauthenticated users only get a boolean 'configured' flag
+    if not user:
+        return {
+            "configured": init_err is None,
+        }
+
     return {
         "configured": init_err is None,
         "init_error": str(init_err) if init_err else None,
@@ -194,8 +198,13 @@ def update_settings(
         settings.vector_store,
     )
 
+    get_settings.cache_clear()
+    from app.generation import get_chat_model
+    get_chat_model.cache_clear()
+
     return {
         "status": "updated_in_memory",
+        "warning": "Changes reset on server restart. Use environment variables for persistence.",
         "settings": SettingsResponse(
             rag_top_k=settings.rag_top_k,
             rag_chunk_size=settings.rag_chunk_size,

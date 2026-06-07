@@ -21,6 +21,8 @@ import AuthCallbackPage from './features/auth/AuthCallback';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 
+// NOTE: This must never be asynchronous. If authEnabled is ever made async (e.g. fetched from /system/config),
+// this top-level const pattern will silently fallback to initial values and bypass ProtectedRoute.
 const AUTH_ENABLED = authEnabled;
 
 function DashboardRoutes() {

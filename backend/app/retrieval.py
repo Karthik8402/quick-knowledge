@@ -102,7 +102,7 @@ def _build_faiss_store(embeddings: Embeddings):
             return FAISS.load_local(faiss_dir, embeddings, allow_dangerous_deserialization=True)
         except Exception:
             pass
-    return FAISS.from_texts(["bootstrap"], embedding=embeddings)
+    return FAISS.from_texts(["__empty__"], embedding=embeddings)
 
 
 def _build_owner_filter(

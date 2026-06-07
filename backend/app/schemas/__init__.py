@@ -136,6 +136,8 @@ class StatusResponse(BaseModel):
     embeddings_loaded: bool
     documents: int
     chunks: int
+    storage_backend: str
+    auth_enabled: bool
 
 
 class HealthResponse(BaseModel):

@@ -152,11 +152,11 @@ def ingest_files(
                 import tempfile
 
                 temp_dir = Path(tempfile.mkdtemp())
-                tmp = temp_dir / upload.filename
+                tmp = temp_dir / Path(upload.filename).name
                 tmp.write_bytes(file_bytes)
                 destination = tmp
             else:
-                destination = Path(settings.upload_dir) / upload.filename
+                destination = Path(settings.upload_dir) / Path(upload.filename).name
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(file_bytes)
 

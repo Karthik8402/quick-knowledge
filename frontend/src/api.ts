@@ -32,7 +32,9 @@ function cachedGet<T>(key: string, loader: () => Promise<T>, ttlMs: number = GET
 
   let promise: Promise<T>;
   promise = loader().catch((error) => {
-    if (getCache.get(key)?.promise === promise) getCache.delete(key);
+    if (getCache.get(key)?.promise === promise) {
+      getCache.set(key, { expiresAt: Date.now() + 2000, promise });
+    }
     throw error;
   });
   getCache.set(key, { expiresAt: now + ttlMs, promise });
@@ -151,20 +153,29 @@ export async function chatStream(
   onDone: () => void,
   onError: (error: string) => void,
   history?: ChatMessage[],
+  signal?: AbortSignal,
 ): Promise<void> {
   const token = await getAccessToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      question,
-      document_ids: documentIds?.length ? documentIds : null,
-      history: history?.length ? history : null,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/chat/stream`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        question,
+        document_ids: documentIds?.length ? documentIds : null,
+        history: history?.length ? history : null,
+      }),
+      signal,
+    });
+  } catch (err: any) {
+    if (err.name === 'AbortError') return;
+    onError(err.message || 'Failed to connect to chat stream');
+    return;
+  }
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -190,6 +201,7 @@ export async function chatStream(
   let buffer = '';
   let currentEvent = 'message';
   let dataBuffer = '';
+  let doneDispatched = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -206,24 +218,24 @@ export async function chatStream(
             } catch { /* ignore parse errors */ }
             break;
           case 'done':
-            onDone();
+            if (!doneDispatched) { onDone(); doneDispatched = true; }
             break;
           case 'error':
             onError(dataBuffer);
             break;
         }
       }
-      onDone();
+      if (!doneDispatched) { onDone(); doneDispatched = true; }
       break;
     }
 
     buffer += decoder.decode(value, { stream: true });
+    buffer = buffer.replace(/\r/g, '');
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
 
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
-      if (line.endsWith('\r')) line = line.slice(0, -1);
 
       if (line === '') {
         if (dataBuffer || currentEvent === 'done') {
@@ -238,7 +250,7 @@ export async function chatStream(
               } catch { /* ignore parse errors */ }
               break;
             case 'done':
-              onDone();
+              if (!doneDispatched) { onDone(); doneDispatched = true; }
               break;
             case 'error':
               onError(dataBuffer);

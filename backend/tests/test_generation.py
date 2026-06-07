@@ -109,15 +109,16 @@ class TestAnswerWithCitations:
 
     @patch("app.generation.get_chat_model")
     def test_llm_exception_returns_fallback(self, mock_get_model):
-        from app.generation import FALLBACK_ANSWER, answer_with_citations
+        from app.generation import answer_with_citations
 
         mock_model = MagicMock()
         mock_model.invoke.side_effect = Exception("API error")
         mock_get_model.return_value = mock_model
 
         docs = [(make_document(), 0.9)]
-        result = answer_with_citations("question", docs)
-        assert result["answer"] == FALLBACK_ANSWER
+        import pytest
+        with pytest.raises(RuntimeError, match="LLM generation failed"):
+            answer_with_citations("question", docs)
 
     @patch("app.generation.get_chat_model")
     def test_valid_llm_response(self, mock_get_model):

@@ -25,6 +25,8 @@ def upload_documents(
     vector_store: Any = Depends(get_vector_store),
     user: UserContext = Depends(get_current_user),
 ):
+    if len(files) > 10:
+        raise HTTPException(status_code=400, detail="Max 10 files per upload request.")
     return DocumentService.upload_documents(files, vector_store, user.user_id)
 
 

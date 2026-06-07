@@ -15,7 +15,7 @@ class DocumentService:
         if not files:
             raise NoFilesUploadedError()
 
-        logger.info("Upload request from user=%s: %d file(s)", owner_id, len(files))
+        logger.info("Upload request from user=%s: %d file(s) - e.g. %s", owner_id, len(files), repr(files[0].filename) if files else "")
         results = ingest_files(files, vector_store, owner_id=owner_id)
         logger.info("Upload complete: %s", [r["status"] for r in results])
         return results
@@ -41,7 +41,17 @@ class DocumentService:
 
         # Delete from vector store — try metadata filter first, then ID-based
         try:
-            if settings.vector_store.lower() in {"chroma", "pgvector"}:
+            if settings.vector_store.lower() == "pgvector":
+                if hasattr(vector_store, "get"):
+                    try:
+                        res = vector_store.get(where={"document_id": document_id})
+                        ids_to_remove = res.get("ids", [])
+                        if ids_to_remove and hasattr(vector_store, "delete"):
+                            vector_store.delete(ids_to_remove)
+                            logger.info("Deleted %d pgvector vectors for document %s", len(ids_to_remove), document_id)
+                    except Exception as e:
+                        logger.warning("Failed to get or delete pgvector chunks: %s", e)
+            elif settings.vector_store.lower() == "chroma":
                 if hasattr(vector_store, "delete"):
                     vector_store.delete(where={"document_id": document_id})
                     if hasattr(vector_store, "persist"):

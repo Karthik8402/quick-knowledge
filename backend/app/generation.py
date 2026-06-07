@@ -112,8 +112,7 @@ def get_chat_model():
             model=settings.llm_model,
             api_key=settings.groq_api_key,
             temperature=settings.llm_temperature,
-            top_p=settings.llm_top_p,
-        )
+        ).bind(top_p=settings.llm_top_p)
 
     raise ValueError(f"Unsupported llm provider: {settings.llm_provider}")
 
@@ -121,7 +120,7 @@ def get_chat_model():
 def build_context(retrieved_docs: list[tuple[Document, float]]) -> str:
     """Build a structured context block with document name, page, and content."""
     chunks = []
-    for index, (doc, score) in enumerate(retrieved_docs, start=1):
+    for index, (doc, _score) in enumerate(retrieved_docs, start=1):
         meta = doc.metadata or {}
         file_name = meta.get("file_name", "Unknown Document")
         page = meta.get("page")
@@ -133,7 +132,6 @@ def build_context(retrieved_docs: list[tuple[Document, float]]) -> str:
             header_parts.append(f"Page: {int(page) + 1}")
         if section:
             header_parts.append(f"Section: {section}")
-        header_parts.append(f"Relevance: {score:.4f}")
         header_parts.append("Content:")
         header_parts.append(doc.page_content)
 
@@ -248,8 +246,10 @@ def answer_with_citations(
 
     try:
         response = llm.invoke(messages)
-    except Exception:
-        return {"answer": FALLBACK_ANSWER, "citation_indices": []}
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("LLM generation failed")
+        raise RuntimeError(f"LLM generation failed: {e}") from e
 
     content = _extract_text(response.content)
     return _parse_llm_response(content)
@@ -289,7 +289,10 @@ def stream_answer_with_citations(
                     collected.append(token)
                     yield token
         except Exception:
-            yield FALLBACK_ANSWER
+            if not collected:
+                yield FALLBACK_ANSWER
+            else:
+                raise
 
     def get_citations() -> list[int]:
         """Parse citation indices from the fully-collected stream buffer.

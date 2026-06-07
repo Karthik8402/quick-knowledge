@@ -46,7 +46,7 @@ export const useUsageStore = create<UsageStore>((set, get) => ({
     const { data } = get();
     if (data && data.remaining > 0) {
       const used = data.used + 1;
-      const remaining = data.remaining - 1;
+      const remaining = Math.max(0, data.remaining - 1);
       const percentage = Math.min(100, Math.floor((used / data.limit) * 100));
       set({
         data: {

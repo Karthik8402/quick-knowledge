@@ -16,6 +16,15 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+// Mock useAuth since ChatPage needs user.id
+vi.mock('../hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: { id: 'test-user' },
+    loading: false,
+    session: null,
+  }),
+}));
+
 // Mock usage store to avoid network/cache requests
 vi.mock('../services/usage', () => ({
   useUsageStore: () => ({

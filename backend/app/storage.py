@@ -11,6 +11,7 @@ import threading
 from typing import Protocol
 
 from .config import get_settings
+from .exceptions import StorageUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,9 @@ class LocalDocumentRegistry:
 
     def _write(self, payload: dict) -> None:
         self._cached_data = payload
-        self.path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        tmp.replace(self.path)
 
     def list_documents(self, owner_id: str | None = None) -> list[dict]:
         with self._lock:
@@ -66,10 +69,14 @@ class LocalDocumentRegistry:
         return len(self.list_documents(owner_id))
 
     def find_by_hash(self, content_hash: str, owner_id: str | None = None) -> dict | None:
-        for item in self.list_documents(owner_id):
-            if item.get("content_hash") == content_hash:
-                return item
-        return None
+        with self._lock:
+            docs = self._read().get("documents", [])
+            if owner_id:
+                docs = [d for d in docs if d.get("owner_id") == owner_id]
+            for item in docs:
+                if item.get("content_hash") == content_hash:
+                    return item
+            return None
 
     def get(self, document_id: str) -> dict | None:
         for item in self.list_documents():
@@ -122,48 +129,66 @@ class SupabaseDocumentRegistry:
         logger.info("Supabase document registry initialized")
 
     def list_documents(self, owner_id: str | None = None) -> list[dict]:
-        query = self._client.table(self._table).select("*").order("created_at", desc=True)
-        if owner_id:
-            query = query.eq("owner_id", owner_id)
-        result = query.execute()
-        return result.data or []
+        try:
+            query = self._client.table(self._table).select("*").order("created_at", desc=True)
+            if owner_id:
+                query = query.eq("owner_id", owner_id)
+            result = query.execute()
+            return result.data or []
+        except Exception as e:
+            raise StorageUnavailableError(str(e)) from e
 
     def count(self, owner_id: str | None = None) -> int:
-        query = self._client.table(self._table).select("document_id", count="exact")
-        if owner_id:
-            query = query.eq("owner_id", owner_id)
-        result = query.limit(0).execute()
-        return result.count or 0
+        try:
+            query = self._client.table(self._table).select("document_id", count="exact")
+            if owner_id:
+                query = query.eq("owner_id", owner_id)
+            result = query.limit(0).execute()
+            return result.count or 0
+        except Exception as e:
+            raise StorageUnavailableError(str(e)) from e
 
     def find_by_hash(self, content_hash: str, owner_id: str | None = None) -> dict | None:
-        query = self._client.table(self._table).select("*").eq("content_hash", content_hash)
-        if owner_id:
-            query = query.eq("owner_id", owner_id)
-        result = query.limit(1).execute()
-        return result.data[0] if result.data else None
+        try:
+            query = self._client.table(self._table).select("*").eq("content_hash", content_hash)
+            if owner_id:
+                query = query.eq("owner_id", owner_id)
+            result = query.limit(1).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            raise StorageUnavailableError(str(e)) from e
 
     def get(self, document_id: str) -> dict | None:
-        result = (
-            self._client.table(self._table)
-            .select("*")
-            .eq("document_id", document_id)
-            .limit(1)
-            .execute()
-        )
-        return result.data[0] if result.data else None
+        try:
+            result = (
+                self._client.table(self._table)
+                .select("*")
+                .eq("document_id", document_id)
+                .limit(1)
+                .execute()
+            )
+            return result.data[0] if result.data else None
+        except Exception as e:
+            raise StorageUnavailableError(str(e)) from e
 
     def upsert(self, item: dict) -> None:
-        self._client.table(self._table).upsert(item, on_conflict="document_id").execute()
-        logger.info("Upserted document %s (%s)", item.get("document_id"), item.get("file_name"))
+        try:
+            self._client.table(self._table).upsert(item, on_conflict="document_id").execute()
+            logger.info("Upserted document %s (%s)", item.get("document_id"), item.get("file_name"))
+        except Exception as e:
+            raise StorageUnavailableError(str(e)) from e
 
     def delete(self, document_id: str) -> dict | None:
-        target = self.get(document_id)
-        if target:
-            self._client.table(self._table).delete().eq("document_id", document_id).execute()
-            logger.info("Deleted document %s", document_id)
-        else:
-            logger.warning("Attempted to delete non-existent document %s", document_id)
-        return target
+        try:
+            target = self.get(document_id)
+            if target:
+                self._client.table(self._table).delete().eq("document_id", document_id).execute()
+                logger.info("Deleted document %s", document_id)
+            else:
+                logger.warning("Attempted to delete non-existent document %s", document_id)
+            return target
+        except Exception as e:
+            raise StorageUnavailableError(str(e)) from e
 
 
 # ---------------------------------------------------------------------------

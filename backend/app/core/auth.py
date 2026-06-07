@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import threading
 import time
 from typing import Any
 
+from cachetools import TTLCache
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import httpx
@@ -19,7 +21,8 @@ logger = logging.getLogger(__name__)
 _bearer_scheme = HTTPBearer(auto_error=False)
 _TOKEN_CACHE_SKEW_SECONDS = 30
 _TOKEN_CACHE_MAX_SECONDS = 300
-_token_user_cache: dict[str, tuple[float, UserContext]] = {}
+_token_user_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)
+_cache_lock = threading.Lock()
 _jwks_clients: dict[str, jwt.PyJWKClient] = {}
 
 
@@ -90,22 +93,24 @@ def _cache_expiry_for_token(token: str) -> float:
 
 
 def _get_cached_user(token: str) -> UserContext | None:
-    cached = _token_user_cache.get(token)
-    if cached is None:
+    with _cache_lock:
+        cached = _token_user_cache.get(token)
+        if cached is None:
+            return None
+
+        expires_at, user = cached
+        if expires_at > time.time():
+            return user
+
+        _token_user_cache.pop(token, None)
         return None
-
-    expires_at, user = cached
-    if expires_at > time.time():
-        return user
-
-    _token_user_cache.pop(token, None)
-    return None
 
 
 def _cache_user(token: str, user: UserContext) -> None:
     expires_at = _cache_expiry_for_token(token)
     if expires_at > time.time():
-        _token_user_cache[token] = (expires_at, user)
+        with _cache_lock:
+            _token_user_cache[token] = (expires_at, user)
 
 
 def verify_jwt(token: str) -> dict[str, Any]:

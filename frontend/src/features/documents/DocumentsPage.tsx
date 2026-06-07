@@ -37,6 +37,26 @@ export default function DocumentsPage() {
   /* ── Upload handler ── */
   const handleUpload = useCallback(async (files: File[]) => {
     if (!files.length) return;
+
+    const MAX_SIZE = 25 * 1024 * 1024; // 25MB according to UI text
+    const ALLOWED = [
+      'application/pdf',
+      'text/plain',
+      'text/markdown',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+
+    for (const file of files) {
+      if (file.size > MAX_SIZE) {
+        showToast('error', 'Upload Failed', `File ${file.name} is too large (max 25MB)`);
+        return;
+      }
+      if (!ALLOWED.includes(file.type) && !file.name.endsWith('.md')) {
+        showToast('error', 'Upload Failed', `File ${file.name} has an unsupported type`);
+        return;
+      }
+    }
+
     setUploading(true);
     try {
       const results = await uploadDocuments(files);
