@@ -140,7 +140,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install security tools
-        run: python -m pip install pip-audit bandit[toml]==1.7.9
+        run: python -m pip install pip-audit "bandit[toml]==1.7.9"
 
       - name: pip-audit advisory scan
         run: pip-audit -r requirements.txt --desc --format markdown
