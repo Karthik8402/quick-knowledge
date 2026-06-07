@@ -85,7 +85,7 @@ class UsageService:
         from app.core.supabase import get_supabase_client
 
         today_str = datetime.now(UTC).strftime("%Y-%m-%d")
-        
+
         try:
             client = get_supabase_client()
             # Upsert: insert row with used=1, or increment existing row atomically.
