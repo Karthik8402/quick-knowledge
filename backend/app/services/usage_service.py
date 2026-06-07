@@ -82,7 +82,7 @@ class UsageService:
         today_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
         # Upsert: insert row with used=1, or increment existing row atomically.
-        result = (
+        (
             client.table("usage")
             .upsert(
                 {"user_id": user_id, "date": today_str, "used": 1},

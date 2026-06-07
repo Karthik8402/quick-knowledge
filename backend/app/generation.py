@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Callable, Generator, cast
+from collections.abc import Callable, Generator
+from typing import Any, cast
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
