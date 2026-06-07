@@ -77,6 +77,11 @@ def health(
         or os.environ.get("GIT_COMMIT")
         or "local",
         "python_version": platform.python_version(),
+        "disk_free_mb": round(disk_free_mb, 2) if disk_free_mb >= 0 else None,
+        "storage_backend": settings.storage_backend,
+        "vector_store": settings.vector_store,
+        "auth_enabled": settings.auth_enabled,
+        "checks": checks,
     }
 
 
