@@ -42,15 +42,14 @@ class DocumentService:
         # Delete from vector store — try metadata filter first, then ID-based
         try:
             if settings.vector_store.lower() == "pgvector":
-                if hasattr(vector_store, "get"):
+                chunks_count = doc.get("chunks", 0)
+                ids_to_remove = [f"{document_id}:{i}" for i in range(chunks_count)]
+                if ids_to_remove and hasattr(vector_store, "delete"):
                     try:
-                        res = vector_store.get(where={"document_id": document_id})
-                        ids_to_remove = res.get("ids", [])
-                        if ids_to_remove and hasattr(vector_store, "delete"):
-                            vector_store.delete(ids_to_remove)
-                            logger.info("Deleted %d pgvector vectors for document %s", len(ids_to_remove), document_id)
+                        vector_store.delete(ids=ids_to_remove)
+                        logger.info("Deleted %d pgvector vectors for document %s", len(ids_to_remove), document_id)
                     except Exception as e:
-                        logger.warning("Failed to get or delete pgvector chunks: %s", e)
+                        logger.warning("Failed to delete pgvector chunks: %s", e)
             elif settings.vector_store.lower() == "chroma":
                 if hasattr(vector_store, "delete"):
                     vector_store.delete(where={"document_id": document_id})
@@ -103,6 +102,25 @@ class DocumentService:
                         continue
                     text = doc.page_content if hasattr(doc, "page_content") else str(doc)
                     chunks.append({"text": text, "page": meta.get("page")})
+        elif hasattr(vector_store, "get_by_ids"):
+            try:
+                from app.storage import registry as reg
+                doc = reg.get(document_id)
+                if doc:
+                    chunks_count = doc.get("chunks", 0)
+                    ids = [f"{document_id}:{i}" for i in range(chunks_count)]
+                    docs = vector_store.get_by_ids(ids)
+                    docs_sorted = sorted(
+                        docs,
+                        key=lambda d: d.metadata.get("chunk_index", 0) if d.metadata else 0
+                    )
+                    for doc in docs_sorted:
+                        meta = doc.metadata or {}
+                        if owner_id and owner_id != "anonymous" and meta.get("owner_id") != owner_id:
+                            continue
+                        chunks.append({"text": doc.page_content, "page": meta.get("page")})
+            except Exception as e:
+                logger.warning("Failed to query chunks via get_by_ids for document %s: %s", document_id, e)
         elif hasattr(vector_store, "get"):
             try:
                 where_filter: dict = {"document_id": document_id}

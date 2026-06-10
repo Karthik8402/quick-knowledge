@@ -123,6 +123,22 @@ class TestDeleteDocument:
 
         vector_store.delete.assert_called_once_with(where={"document_id": "doc1"})
 
+    def test_calls_vector_store_delete_pgvector(self):
+        doc = {"document_id": "doc1", "file_name": "test.pdf", "owner_id": "anon", "chunks": 3}
+        reg = self._make_reg(doc)
+        vector_store = MagicMock()
+        vector_store.delete = MagicMock()
+
+        with patch("app.services.document_service.get_settings") as mock_settings:
+            mock_settings.return_value.auth_enabled = False
+            mock_settings.return_value.vector_store = "pgvector"
+            mock_settings.return_value.storage_backend = "local"
+            mock_settings.return_value.upload_dir = "/tmp/uploads"
+
+            DocumentService.delete_document("doc1", vector_store, reg, owner_id="anon")
+
+        vector_store.delete.assert_called_once_with(ids=["doc1:0", "doc1:1", "doc1:2"])
+
     def test_auth_guard_blocks_wrong_owner(self):
         doc = {"document_id": "doc1", "file_name": "test.pdf", "owner_id": "alice"}
         reg = self._make_reg(doc)
@@ -151,6 +167,7 @@ class TestGetChunks:
         """Simulates a Chroma-style .get() interface."""
         vector_store = MagicMock()
         del vector_store.docstore  # ensure it uses the .get() path
+        del vector_store.get_by_ids # ensure pgvector path is not taken
 
         vector_store.get.return_value = {
             "documents": ["chunk text here"],
@@ -167,6 +184,7 @@ class TestGetChunks:
         """If .get() raises an exception, should silently return []."""
         vector_store = MagicMock()
         del vector_store.docstore
+        del vector_store.get_by_ids # ensure pgvector path is not taken
 
         vector_store.get.side_effect = Exception("DB error")
 
@@ -194,3 +212,35 @@ class TestGetChunks:
         assert len(result) == 1
         assert result[0]["text"] == "correct chunk"
         assert result[0]["page"] == 1
+
+    def test_queries_pgvector_style_vector_store(self):
+        """Simulates a pgvector-style .get_by_ids() interface."""
+        from langchain_core.documents import Document
+
+        doc_chunk_1 = Document(
+            page_content="chunk 1 text",
+            metadata={"document_id": "doc-pg", "chunk_index": 0, "page": 0}
+        )
+        doc_chunk_2 = Document(
+            page_content="chunk 2 text",
+            metadata={"document_id": "doc-pg", "chunk_index": 1, "page": 1}
+        )
+
+        vector_store = MagicMock()
+        del vector_store.docstore  # Ensure docstore path is not taken
+        del vector_store.get       # Ensure chroma path is not taken
+
+        vector_store.get_by_ids.return_value = [doc_chunk_2, doc_chunk_1]
+
+        mock_registry_doc = {"document_id": "doc-pg", "chunks": 2}
+
+        with patch("app.storage.registry.get", return_value=mock_registry_doc):
+            result = DocumentService.get_chunks("doc-pg", vector_store)
+
+        vector_store.get_by_ids.assert_called_once_with(["doc-pg:0", "doc-pg:1"])
+        assert len(result) == 2
+        assert result[0]["text"] == "chunk 1 text"
+        assert result[0]["page"] == 0
+        assert result[1]["text"] == "chunk 2 text"
+        assert result[1]["page"] == 1
+

@@ -46,3 +46,4 @@ stitch_projects/*
 skills/*
 .temp/
 .mypy_cache/
+.cursor/

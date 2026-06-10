@@ -16,9 +16,7 @@ services:
       - key: STORAGE_BACKEND
         value: supabase
       - key: VECTOR_STORE
-        value: chroma
-      - key: CHROMA_PERSIST_DIR
-        value: ./data/chroma
+        value: pgvector
       - key: AUTH_ENABLED
         value: "true"
       - key: LLM_PROVIDER
@@ -41,6 +39,8 @@ services:
         value: 10/minute
       # Secrets — set these in the Render Dashboard
       - key: GOOGLE_API_KEY
+        sync: false
+      - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
         sync: false
