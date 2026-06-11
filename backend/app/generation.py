@@ -47,6 +47,41 @@ class StreamResult:
         return self._extra.get(key, default)
 
 
+import time
+import logging
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+logger = logging.getLogger(__name__)
+
+
+class ThrottledGoogleEmbeddings(GoogleGenerativeAIEmbeddings):
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        # Free tier limit is 100 requests per minute.
+        # Let's batch into chunks of 30, and sleep/retry between them.
+        batch_size = 30
+        all_embeddings = []
+        
+        @retry(
+            reraise=True,
+            stop=stop_after_attempt(5),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            retry=retry_if_exception_type(Exception),
+        )
+        def _embed_batch(batch: list[str]) -> list[list[float]]:
+            return super(ThrottledGoogleEmbeddings, self).embed_documents(batch)
+
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            logger.info("Embedding batch of %d texts (index %d to %d)...", len(batch), i, i + len(batch))
+            embeddings = _embed_batch(batch)
+            all_embeddings.extend(embeddings)
+            if i + batch_size < len(texts):
+                # Small delay between batches to avoid hitting rate limits
+                time.sleep(1.0)
+                
+        return all_embeddings
+
+
 def get_embeddings() -> Embeddings:
     settings = get_settings()
 
@@ -54,8 +89,7 @@ def get_embeddings() -> Embeddings:
         if not settings.google_api_key:
             raise ValueError("GOOGLE_API_KEY is required for google embeddings")
         model_name = settings.embedding_model
-        embeddings_cls = cast(Any, GoogleGenerativeAIEmbeddings)
-        return embeddings_cls(model=model_name, google_api_key=settings.google_api_key)
+        return ThrottledGoogleEmbeddings(model=model_name, google_api_key=settings.google_api_key)
 
     if settings.embedding_provider.lower() == "openai":
         if not settings.openai_api_key:

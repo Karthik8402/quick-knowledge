@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
 import { BRAND } from '../config/branding';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 
 const featureCards = [
   {
@@ -83,6 +84,9 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background text-on-surface">
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggleButton />
+      </div>
       <PublicNav />
 
       <main>

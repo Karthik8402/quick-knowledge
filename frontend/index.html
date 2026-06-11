@@ -6,17 +6,35 @@
     <title>Quick Knowledge — AI-Powered Knowledge Platform</title>
     <!-- Prevent flash of wrong theme (FOWT) — runs before React -->
     <script>
-      (function(){
-        var t = localStorage.getItem('ik-theme');
-        var dark = t === 'dark' || ((!t || t === 'system') && matchMedia('(prefers-color-scheme:dark)').matches);
-        if (dark) document.documentElement.classList.add('dark');
+      (function() {
+        const t = localStorage.getItem('ik-theme') || 'system';
+        const resolved = t === 'system'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : t;
+        document.documentElement.setAttribute('data-theme', resolved);
+        document.documentElement.classList.toggle('dark', resolved === 'dark');
       })();
     </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <link
+      rel="preload"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=optional"
+      as="style"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=optional"
+    />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      document.fonts.ready.then(() => {
+        document.documentElement.classList.add('fonts-loaded');
+      });
+    </script>
   </body>
 </html>

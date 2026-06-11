@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useTheme } from '../../hooks/useTheme';
+import { ThemeToggleButton } from '../../components/ThemeToggleButton';
 
 export default function ResetPasswordPage() {
   const { updateUserPassword } = useAuth();
@@ -17,12 +17,6 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [validatingSession, setValidatingSession] = useState(true);
-  const { theme, setTheme } = useTheme();
-
-  const cycleTheme = () => {
-    const next = theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system';
-    setTheme(next);
-  };
 
   // Supabase automatically captures the hash fragment when clicking an email link
   // and establishes a session. We just need to ensure the session exists.
@@ -70,6 +64,9 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggleButton />
+      </div>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-green-600/10 rounded-full blur-[128px] pointer-events-none" />
 
       <motion.div
@@ -79,17 +76,6 @@ export default function ResetPasswordPage() {
         className="w-full max-w-md relative z-10"
       >
         <Card className="relative border-outline-variant/20 bg-surface-container/80 backdrop-blur-xl shadow-2xl">
-          {/* Theme Toggle Button */}
-          <button
-            onClick={cycleTheme}
-            type="button"
-            className="absolute top-4 right-4 text-outline hover:text-on-surface p-1.5 rounded-full hover:bg-surface-container-highest transition-colors"
-            title={`Switch theme (currently ${theme})`}
-          >
-            <span className="material-symbols-outlined text-lg">
-              {theme === 'system' ? 'brightness_auto' : theme === 'light' ? 'light_mode' : 'dark_mode'}
-            </span>
-          </button>
           <CardHeader className="space-y-2 text-center pb-6">
             <div className="flex justify-center mb-4">
               <div className="p-3 bg-green-500/10 rounded-2xl ring-1 ring-green-500/20">

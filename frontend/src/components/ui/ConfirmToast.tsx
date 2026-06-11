@@ -16,28 +16,22 @@ type ConfirmToastProps = {
 };
 
 const toneMap: Record<Tone, {
-  bg: string;
-  border: string;
   icon: string;
   iconName: string;
   confirm: string;
   cancel: string;
 }> = {
   danger: {
-    bg: 'bg-[#2d0a0a]/90',
-    border: 'border-[#ff4961]/30',
-    icon: 'text-[#ff4961]',
+    icon: 'text-error',
     iconName: 'warning',
-    confirm: 'bg-[#ff4961]/20 text-[#ff9aa8] hover:bg-[#ff4961]/30',
-    cancel: 'bg-surface-container-high/60 text-on-surface-variant hover:bg-surface-container-high',
+    confirm: 'bg-error hover:bg-error/90 text-white rounded-md px-4 py-2',
+    cancel: 'bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface rounded-md px-4 py-2',
   },
   info: {
-    bg: 'bg-surface-container-high/90',
-    border: 'border-primary/30',
     icon: 'text-primary',
     iconName: 'info',
-    confirm: 'bg-primary/20 text-primary hover:bg-primary/30',
-    cancel: 'bg-surface-container-high/60 text-on-surface-variant hover:bg-surface-container-high',
+    confirm: 'bg-primary hover:bg-primary/90 text-white rounded-md px-4 py-2',
+    cancel: 'bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface rounded-md px-4 py-2',
   },
 };
 
@@ -57,9 +51,9 @@ export default function ConfirmToast({
   const styles = toneMap[tone];
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm">
       <div className="w-[92%] max-w-md animate-scale-in">
-        <div className={`${styles.bg} ${styles.border} border backdrop-blur-xl rounded-2xl p-5 shadow-2xl flex items-start gap-3`}>
+        <div className="bg-surface border border-outline-variant rounded-xl shadow-lg p-6 flex items-start gap-3">
           <span className={`material-symbols-outlined ${styles.icon} text-xl mt-0.5`}>{styles.iconName}</span>
           <div className="flex-grow min-w-0">
             <p className="text-on-surface font-semibold text-sm">{title}</p>
@@ -69,14 +63,14 @@ export default function ConfirmToast({
               <button
                 onClick={onConfirm}
                 disabled={busy}
-                className={`${styles.confirm} px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed`}
+                className={`${styles.confirm} text-xs font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed`}
               >
                 {confirmLabel}
               </button>
               <button
                 onClick={onCancel}
                 disabled={busy}
-                className={`${styles.cancel} px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed`}
+                className={`${styles.cancel} text-xs font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed`}
               >
                 {cancelLabel}
               </button>

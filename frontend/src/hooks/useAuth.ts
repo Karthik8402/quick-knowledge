@@ -54,11 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth
       .getSession()
-      .then(({ data: { session } }) => {
+      .then(({ data: { session }, error }) => {
         if (!active) return;
+        if (error) {
+          console.error('Session error (e.g. Invalid Refresh Token):', error);
+          clearApiCache();
+          const keysToRemove = Object.keys(localStorage).filter(k => k.startsWith('qk_'));
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+          sessionStorage.clear();
+        }
         setState({
           user: session?.user ?? null,
-          session,
+          session: error ? null : session,
           loading: false,
         });
       })
@@ -73,8 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      clearApiCache();
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        clearApiCache();
+        const keysToRemove = Object.keys(localStorage).filter(k => k.startsWith('qk_'));
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+        sessionStorage.clear();
+      }
       setState({
         user: session?.user ?? null,
         session,

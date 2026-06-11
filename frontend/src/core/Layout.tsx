@@ -6,19 +6,9 @@ import ToastContainer from '../shared/Toast';
 import { useAuth } from '../hooks/useAuth';
 import { authEnabled } from '../lib/supabase';
 import { BRAND } from '../config/branding';
-import { useTheme, type ThemePreference } from '../hooks/useTheme';
+import { useTheme } from '../hooks/useTheme';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 
-const THEME_CYCLE: ThemePreference[] = ['system', 'light', 'dark'];
-const THEME_ICON: Record<ThemePreference, string> = {
-  system: 'brightness_auto',
-  light: 'light_mode',
-  dark: 'dark_mode',
-};
-const THEME_LABEL: Record<ThemePreference, string> = {
-  system: 'System',
-  light: 'Light',
-  dark: 'Dark',
-};
 
 export default function Layout() {
   const { loading, user, signOut } = useAuth();
@@ -32,10 +22,7 @@ export default function Layout() {
   const mainRef = useRef<HTMLElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const cycleTheme = () => {
-    const idx = THEME_CYCLE.indexOf(theme);
-    setTheme(THEME_CYCLE[(idx + 1) % THEME_CYCLE.length]);
-  };
+
 
   const fetchDocs = useCallback(async () => {
     try {
@@ -89,25 +76,44 @@ export default function Layout() {
     navigate('/login');
   };
 
-  const navClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-6 py-3 transition-all duration-300 ease-out-expo relative overflow-hidden group ${
-      isActive
-        ? 'text-primary border-l-2 border-primary bg-surface-container font-bold'
-        : 'text-outline hover:text-on-surface hover:bg-surface-container'
-    }`;
+  type NavItem = {
+    icon: string;
+    label: string;
+    path: string;
+  };
 
-  const navItems = [
-    { to: '/dashboard', icon: 'dashboard', label: 'Dashboard' },
-    { to: '/documents', icon: 'folder_open', label: 'Documents' },
-    { to: '/chat', icon: 'chat', label: 'Knowledge Chat' },
-    { to: '/chunks', icon: 'segment', label: 'Chunks' },
-    { to: '/status', icon: 'analytics', label: 'System Status' },
-    { to: '/settings', icon: 'settings', label: 'Settings' },
-    { to: '/analytics', icon: 'bar_chart', label: 'Analytics' },
-    { to: '/models', icon: 'model_training', label: 'AI Models' },
-    { to: '/sessions', icon: 'history', label: 'Sessions' },
-    { to: '/activity', icon: 'timeline', label: 'Activity' },
-    { to: '/notifications', icon: 'notifications', label: 'Notifications' },
+  type NavGroup = {
+    groupLabel: string;
+    items: NavItem[];
+  };
+
+  const NAV_GROUPS: NavGroup[] = [
+    {
+      groupLabel: 'Knowledge',
+      items: [
+        { icon: 'dashboard',    label: 'Dashboard',       path: '/dashboard' },
+        { icon: 'folder_open',  label: 'Documents',       path: '/documents' },
+        { icon: 'chat',         label: 'Knowledge Chat',  path: '/chat' },
+        { icon: 'segment',      label: 'Chunks',          path: '/chunks' },
+      ],
+    },
+    {
+      groupLabel: 'System',
+      items: [
+        { icon: 'analytics',    label: 'System Status',   path: '/status' },
+        { icon: 'settings',     label: 'Settings',        path: '/settings' },
+      ],
+    },
+    {
+      groupLabel: 'Insights',
+      items: [
+        { icon: 'bar_chart',      label: 'Analytics',     path: '/analytics' },
+        { icon: 'model_training', label: 'AI Models',     path: '/models' },
+        { icon: 'history',        label: 'Sessions',      path: '/sessions' },
+        { icon: 'timeline',       label: 'Activity',      path: '/activity' },
+        { icon: 'notifications',  label: 'Notifications', path: '/notifications' },
+      ],
+    },
   ];
 
   const PAGE_TITLES: Record<string, string> = {
@@ -155,7 +161,7 @@ export default function Layout() {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
       `}>
-        <div className="px-6 py-8 flex items-center justify-between">
+        <div className="px-6 py-8 flex items-center justify-between border-b border-outline-variant/30 mb-4">
           <NavLink to="/dashboard" className="group">
             <h1 className="font-['Space_Grotesk'] font-bold text-primary tracking-tighter text-2xl animate-fade-in-down group-hover:opacity-80 transition-opacity">
               {BRAND.name}
@@ -168,18 +174,37 @@ export default function Layout() {
           </button>
         </div>
 
-        <nav className="flex-grow font-['Space_Grotesk'] text-sm tracking-tight overflow-y-auto custom-scrollbar">
-          <div className="space-y-1">
-            {navItems.map((item, i) => (
-              <NavLink key={item.to} to={item.to} className={navClass} style={{ animationDelay: `${i * 0.05}s` }}>
-                <span className="material-symbols-outlined text-lg transition-transform duration-300 group-hover:scale-110">
-                  {item.icon}
-                </span>
-                <span>{item.label}</span>
-                <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-0 bg-primary rounded-full transition-all duration-300 group-hover:h-6" />
-              </NavLink>
-            ))}
-          </div>
+        <nav className="flex-grow font-['Space_Grotesk'] text-sm tracking-tight overflow-y-auto custom-scrollbar flex flex-col gap-6 px-3 py-4">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.groupLabel}>
+              {/* Section label */}
+              <p className="px-2 mb-1 text-xs font-semibold uppercase tracking-widest text-on-surface-variant/50 select-none">
+                {group.groupLabel}
+              </p>
+              {/* Items */}
+              <ul className="flex flex-col gap-0.5">
+                {group.items.map((item) => (
+                  <li key={item.path}>
+                    <NavLink
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isActive
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                        }`
+                      }
+                    >
+                      <span className="material-symbols-outlined text-[20px] shrink-0">
+                        {item.icon}
+                      </span>
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
 
           {/* Quick stats */}
           <div className="mt-8 px-6">
@@ -276,20 +301,7 @@ export default function Layout() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            {/* Theme toggle */}
-            <button
-              onClick={cycleTheme}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors"
-              title={`Theme: ${THEME_LABEL[theme]}`}
-            >
-              <span className="material-symbols-outlined text-lg text-outline hover:text-on-surface transition-colors">
-                {THEME_ICON[theme]}
-              </span>
-            </button>
-            <div className={`w-2 h-2 rounded-full ${documents.length > 0 ? 'bg-green-400 animate-pulse-glow' : 'bg-outline'}`} style={{ boxShadow: documents.length > 0 ? '0 0 8px rgba(74, 222, 128, 0.5)' : 'none' }} />
-            <span className="text-[10px] text-outline uppercase tracking-widest font-bold hidden sm:inline">
-              {documents.length > 0 ? `${documents.length} docs active` : 'no docs'}
-            </span>
+            <ThemeToggleButton />
           </div>
         </header>
 

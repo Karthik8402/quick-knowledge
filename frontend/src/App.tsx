@@ -29,7 +29,7 @@ import ResetPasswordPage from './features/auth/ResetPassword';
 import AuthCallbackPage from './features/auth/AuthCallback';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
-import { useTheme } from './hooks/useTheme';
+import { ThemeProvider } from './hooks/useTheme';
 
 // NOTE: This must never be asynchronous. If authEnabled is ever made async (e.g. fetched from /system/config),
 // this top-level const pattern will silently fallback to initial values and bypass ProtectedRoute.
@@ -68,6 +68,10 @@ function DashboardRoutes() {
 function ProtectedRoute() {
   const { user, loading } = useAuth();
 
+  if (AUTH_ENABLED && loading) {
+    return <LoadingSpinner />;
+  }
+
   if (!AUTH_ENABLED) {
     return <Outlet />;
   }
@@ -79,20 +83,18 @@ function ProtectedRoute() {
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
-function App() {
-  // Initialize theme system at app root (reads localStorage + applies dark class)
-  useTheme();
-
+function AppContent() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Toaster position="top-center" toastOptions={{ 
-          style: {
-            background: 'rgb(var(--toast-bg))',
-            color: 'rgb(var(--toast-color))',
-            border: '1px solid rgb(var(--toast-border))'
-          }
-        }} />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            className: '!bg-surface !text-on-surface !border !border-outline-variant !shadow-md',
+            success: { iconTheme: { primary: 'var(--color-success)', secondary: 'var(--color-surface)' } },
+            error: { iconTheme: { primary: 'var(--color-error)', secondary: 'var(--color-surface)' } },
+          }}
+        />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<HomePage />} />
@@ -108,6 +110,14 @@ function App() {
         </BrowserRouter>
       </AuthProvider>
     </ErrorBoundary>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 

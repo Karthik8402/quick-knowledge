@@ -33,17 +33,17 @@ const iconMap: Record<ToastType, string> = {
 
 const colorMap: Record<ToastType, { bg: string; border: string; icon: string }> = {
   success: {
-    bg: 'bg-[#0d2818]/90',
-    border: 'border-[#2dd36f]/30',
-    icon: 'text-[#2dd36f]',
+    bg: 'bg-green-50/90 dark:bg-[#0d2818]/90',
+    border: 'border-green-200 dark:border-[#2dd36f]/30',
+    icon: 'text-green-600 dark:text-[#2dd36f]',
   },
   error: {
-    bg: 'bg-[#2d0a0a]/90',
-    border: 'border-[#ff4961]/30',
-    icon: 'text-[#ff4961]',
+    bg: 'bg-red-50/90 dark:bg-[#2d0a0a]/90',
+    border: 'border-red-200 dark:border-[#ff4961]/30',
+    icon: 'text-red-600 dark:text-[#ff4961]',
   },
   info: {
-    bg: 'bg-surface-container-high/90',
+    bg: 'bg-surface-container-high/90 dark:bg-surface-container-high/90',
     border: 'border-primary/30',
     icon: 'text-primary',
   },
@@ -104,7 +104,7 @@ export default function ToastContainer() {
               {/* Progress bar */}
               <div className="mt-2 h-[2px] w-full bg-outline-variant/20 rounded-full overflow-hidden">
                 <div
-                  className={`h-full ${toast.type === 'success' ? 'bg-[#2dd36f]' : toast.type === 'error' ? 'bg-[#ff4961]' : 'bg-primary'} rounded-full`}
+                  className={`h-full ${toast.type === 'success' ? 'bg-green-500 dark:bg-[#2dd36f]' : toast.type === 'error' ? 'bg-red-500 dark:bg-[#ff4961]' : 'bg-primary'} rounded-full`}
                   style={{ animation: `progressBar ${(toast.duration ?? 4000) / 1000}s linear forwards` }}
                 />
               </div>
