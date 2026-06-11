@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listDocuments } from '../api';
-import type { DocumentMetadata } from '../types';
+import { getActivityFeed } from '../api';
 
 type ActivityEntry = {
   id: string;
@@ -15,60 +14,35 @@ type ActivityEntry = {
 type FilterTab = 'all' | 'documents' | 'chat' | 'settings';
 
 export default function ActivityPage() {
-  const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
 
-  useEffect(() => {
-    listDocuments()
-      .then(setDocuments)
-      .catch(() => setDocuments([]))
+  const fetchActivity = () => {
+    setLoading(true);
+    getActivityFeed(20)
+      .then(res => setEvents(res.events || []))
+      .catch((err) => {
+        console.error(err);
+        setEvents([]);
+      })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchActivity();
   }, []);
 
-  // Build activity entries from real documents + mock chat/settings entries
-  const docEntries: ActivityEntry[] = documents.map((doc) => ({
-    id: `doc-${doc.document_id}`,
-    icon: 'upload_file',
+  // Map API events directly to UI entries
+  const activities: ActivityEntry[] = events.map((e) => ({
+    id: e.document_id || Math.random().toString(),
+    icon: e.icon || 'upload_file',
     iconColor: 'text-primary',
-    action: 'Document uploaded',
-    detail: `${doc.file_name} — ${doc.pages} pages, ${doc.chunks} chunks`,
-    timestamp: new Date(doc.created_at),
-    category: 'documents' as const,
-  }));
-
-  const activities: ActivityEntry[] = [
-    ...docEntries,
-    // Mock chat entries
-    {
-      id: 'chat-1',
-      icon: 'chat',
-      iconColor: 'text-secondary',
-      action: 'Chat session started',
-      detail: 'Asked about document contents',
-      timestamp: new Date(Date.now() - 3600000),
-      category: 'chat' as const,
-    },
-    {
-      id: 'chat-2',
-      icon: 'chat',
-      iconColor: 'text-secondary',
-      action: 'Chat session started',
-      detail: 'Queried knowledge base for insights',
-      timestamp: new Date(Date.now() - 7200000),
-      category: 'chat' as const,
-    },
-    // Mock settings entries
-    {
-      id: 'settings-1',
-      icon: 'settings',
-      iconColor: 'text-tertiary',
-      action: 'Settings updated',
-      detail: 'RAG parameters adjusted',
-      timestamp: new Date(Date.now() - 86400000),
-      category: 'settings' as const,
-    },
-  ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    action: e.title,
+    detail: e.description,
+    timestamp: new Date(e.timestamp),
+    category: 'documents' as const, // currently backend only returns document uploads
+  })).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
   const filteredActivities = activeFilter === 'all'
     ? activities
@@ -99,7 +73,7 @@ export default function ActivityPage() {
       <div>
         <p className="text-[10px] uppercase tracking-[0.35em] text-outline font-black">Timeline</p>
         <h3 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight">Activity Feed</h3>
-        <p className="text-on-surface-variant text-sm mt-1">Track all actions across your knowledge base.</p>
+        <p className="text-on-surface-variant text-sm mt-1">Real-time trace of actions across your knowledge base.</p>
       </div>
 
       {/* Filter Tabs */}

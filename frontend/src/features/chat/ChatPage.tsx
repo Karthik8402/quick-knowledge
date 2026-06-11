@@ -11,7 +11,7 @@ import DOMPurify from 'dompurify';
 /* ──────────────────────────────────────────────
    Types
    ────────────────────────────────────────────── */
-type Message = { role: 'user' | 'assistant'; text: string; data?: ChatResponse };
+type Message = { role: 'user' | 'assistant'; text: string; data?: ChatResponse; streaming?: boolean; };
 
 type ChatSession = {
   id: string;
@@ -294,9 +294,9 @@ export default function ChatPage() {
       const msgs = [...session.messages];
       if (msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant') {
         const last = msgs[msgs.length - 1];
-        msgs[msgs.length - 1] = { ...last, text: last.text + token };
+        msgs[msgs.length - 1] = { ...last, text: last.text + token, streaming: true };
       } else {
-        msgs.push({ role: 'assistant', text: token });
+        msgs.push({ role: 'assistant', text: token, streaming: true });
       }
       updated[idx] = { ...session, messages: msgs, updatedAt: Date.now() };
       return updated;
@@ -311,9 +311,9 @@ export default function ChatPage() {
       const session = updated[idx];
       const msgs = [...session.messages];
       if (msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant') {
-        msgs[msgs.length - 1] = { role: 'assistant', text, data };
+        msgs[msgs.length - 1] = { role: 'assistant', text, data, streaming: false };
       } else {
-        msgs.push({ role: 'assistant', text, data });
+        msgs.push({ role: 'assistant', text, data, streaming: false });
       }
       updated[idx] = { ...session, messages: msgs, updatedAt: Date.now() };
       return updated;
@@ -512,7 +512,7 @@ export default function ChatPage() {
       <div className={`
         ${showHistory ? (isDesktop ? (historyCollapsed ? 'w-14' : 'w-64 sm:w-72') : 'w-64') : 'w-0'}
         transition-all duration-300 ease-out overflow-hidden flex-shrink-0
-        bg-[#0c1017] border-r border-outline-variant/10
+        bg-surface-container-lowest border-r border-outline-variant/20
         ${showHistory && !isDesktop ? 'fixed inset-y-0 left-0 z-30' : ''}
       `}>
         <div className={`h-full flex flex-col ${historyCollapsed && isDesktop ? 'items-center' : ''}`}>
@@ -544,10 +544,10 @@ export default function ChatPage() {
               <span className="material-symbols-outlined text-sm">add</span>
               New Conversation
             </button>
-            <div className="flex items-center gap-2 px-3 py-2 bg-surface-container/50 rounded-xl border border-outline-variant/10">
+            <div className="flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-on-surface">
               <span className="material-symbols-outlined text-sm text-outline">search</span>
               <input
-                className="flex-1 bg-transparent text-xs text-on-surface placeholder:text-outline/50 focus:outline-none"
+                className="flex-grow bg-transparent text-xs text-on-surface placeholder:text-outline focus:outline-none"
                 placeholder="Search chats..."
                 value={historyQuery}
                 onChange={(e) => setHistoryQuery(e.target.value)}
@@ -608,7 +608,7 @@ export default function ChatPage() {
       <div className="flex-1 flex flex-col h-full min-w-0 min-h-0 relative">
 
         {/* Toolbar */}
-        <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-outline-variant/10 flex-shrink-0 bg-[#0f131a]/85 backdrop-blur-md z-10 relative">
+        <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-outline-variant/15 flex-shrink-0 bg-background/85 backdrop-blur-md z-10 relative">
           <button
             onClick={() => (isDesktop ? setHistoryCollapsed((v) => !v) : setHistoryOpen(!historyOpen))}
             className="p-2 hover:bg-surface-container/70 rounded-xl transition-all duration-200 group"
@@ -673,7 +673,7 @@ export default function ChatPage() {
             </div>
 
             {/* Input bar — inside the empty state, pinned right below suggestions */}
-            <div className="absolute left-0 right-0 bottom-0 px-3 sm:px-6 py-4 bg-gradient-to-t from-[#10141a] to-transparent z-20 w-full">
+            <div className="absolute left-0 right-0 bottom-0 px-3 sm:px-6 py-4 bg-gradient-to-t from-background to-transparent z-20 w-full">
               <ChatInput input={input} setInput={setInput} loading={loading} onSend={handleSend} />
             </div>
           </div>
@@ -688,53 +688,55 @@ export default function ChatPage() {
               <div className="max-w-4xl mx-auto w-full flex flex-col mt-auto space-y-6">
 
                   {/* Messages */}
-                  {messages.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${
-                        msg.role === 'user' ? 'animate-slide-in-right' : 'animate-slide-in-left'
-                      } group/msg`}
-                    >
-                    {/* Assistant avatar */}
-                    {msg.role === 'assistant' && (
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mr-2 sm:mr-3 mt-1 flex-shrink-0 border border-primary/10">
-                        <span className="material-symbols-outlined text-xs sm:text-sm text-primary/70">neurology</span>
-                      </div>
-                    )}
-
-                    <div className="max-w-[92%] sm:max-w-[78%] lg:max-w-[70%] relative">
+                  {messages.map((msg, i) => {
+                    if (msg.role === 'assistant' && !msg.text) return null;
+                    return (
                       <div
-                        className={`p-4 sm:p-5 rounded-2xl backdrop-blur-md transition-all duration-300 ${
-                          msg.role === 'user'
-                            ? 'bg-gradient-to-br from-primary/20 to-secondary/10 border border-primary/25 rounded-br-md text-on-surface shadow-[0_12px_35px_-20px_rgba(181,196,255,0.35)]'
-                            : 'bg-[#151b24]/85 border border-outline-variant/15 rounded-tl-md text-on-surface/90 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.6)]'
-                        }`}
+                        key={i}
+                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${
+                          msg.role === 'user' ? 'animate-slide-in-right' : 'animate-slide-in-left'
+                        } group/msg`}
                       >
-                        {msg.role === 'assistant' ? (
-                          <div className="text-sm leading-relaxed prose prose-invert prose-p:my-2 prose-pre:my-3 prose-pre:bg-black/40 prose-pre:border prose-pre:border-white/10 max-w-none">
-                            {renderMarkdown(msg.text)}
-                          </div>
-                        ) : (
-                          <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                        )}
+                      {/* Assistant avatar */}
+                      {msg.role === 'assistant' && (
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mr-2 sm:mr-3 mt-1 flex-shrink-0 border border-primary/10">
+                          <span className="material-symbols-outlined text-xs sm:text-sm text-primary/70">neurology</span>
+                        </div>
+                      )}
 
-                        {/* Citations */}
-                        {msg.role === 'assistant' && msg.data && msg.data.citations && msg.data.citations.length > 0 && (
-                          <div className="mt-5 pt-4 border-t border-outline-variant/10">
-                            <p className="text-[10px] uppercase tracking-[0.15em] text-outline font-bold mb-3 flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-[14px]">plagiarism</span>
-                              Sourced From
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {msg.data.citations.map((cite, idx) => (
-                                <div
-                                  key={idx}
-                                  className="group/cite relative cursor-pointer px-3 py-1.5 bg-primary/5 rounded-lg border border-primary/10 hover:bg-primary/15 hover:border-primary/30 transition-all duration-300"
-                                >
-                                  <span className="text-[11px] text-primary/80 font-medium">
-                                    {cite.file_name}{cite.page ? ` · p.${cite.page}` : ''}
-                                  </span>
-                                  <div className="absolute bottom-full left-0 mb-2 w-72 p-4 bg-[#1a1f26] rounded-xl hidden group-hover/cite:block z-50 text-xs shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] border border-outline-variant/20 animate-fade-in-down">
+                      <div className="max-w-[92%] sm:max-w-[78%] lg:max-w-[70%] relative">
+                        <div
+                          className={`p-4 sm:p-5 rounded-2xl backdrop-blur-md transition-all duration-300 ${
+                            msg.role === 'user'
+                              ? 'bg-primary/15 text-on-surface border border-primary/20 rounded-br-md shadow-sm'
+                              : 'bg-surface-container/60 backdrop-blur-sm border border-outline-variant/15 rounded-tl-md text-on-surface/90 shadow-sm'
+                          }`}
+                        >
+                          {msg.role === 'assistant' ? (
+                            <div className="text-sm leading-relaxed prose dark:prose-invert prose-neutral prose-p:my-2 prose-pre:my-3 prose-pre:bg-surface-container-highest/40 prose-pre:border prose-pre:border-outline-variant/10 max-w-none">
+                              {renderMarkdown(msg.text)}
+                            </div>
+                          ) : (
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                          )}
+
+                          {/* Citations */}
+                          {msg.role === 'assistant' && msg.data && msg.data.citations && msg.data.citations.length > 0 && (
+                            <div className="mt-5 pt-4 border-t border-outline-variant/10">
+                              <p className="text-[10px] uppercase tracking-[0.15em] text-outline font-bold mb-3 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">plagiarism</span>
+                                Sourced From
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {msg.data.citations.map((cite, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="group/cite relative cursor-pointer px-3 py-1.5 bg-primary/5 rounded-lg border border-primary/10 hover:bg-primary/15 hover:border-primary/30 transition-all duration-300"
+                                  >
+                                    <span className="text-[11px] text-primary/80 font-medium">
+                                      {cite.file_name}{cite.page ? ` · p.${cite.page}` : ''}
+                                    </span>
+                                    <div className="absolute bottom-full left-0 mb-2 w-72 p-4 bg-surface-container-high rounded-xl hidden group-hover/cite:block z-50 text-xs shadow-lg border border-outline-variant/20 animate-fade-in-down">
                                     <p className="text-[11px] text-primary font-bold mb-2 break-all">{cite.file_name}{cite.page ? ` — Page ${cite.page}` : ''}</p>
                                     <p className="text-on-surface-variant/90 leading-relaxed max-h-40 overflow-y-auto custom-scrollbar italic">"{DOMPurify.sanitize(cite.snippet)}"</p>
                                   </div>
@@ -748,7 +750,7 @@ export default function ChatPage() {
                       {/* Copy button */}
                       <button
                         onClick={() => copyMessage(msg.text, i)}
-                        className="absolute -bottom-3 right-3 opacity-0 group-hover/msg:opacity-100 p-1.5 bg-[#1c2330] border border-outline-variant/20 rounded-lg transition-all duration-200 hover:bg-surface-container-highest shadow-lg"
+                        className="absolute -bottom-3 right-3 opacity-0 group-hover/msg:opacity-100 p-1.5 bg-surface-container border border-outline-variant/20 rounded-lg transition-all duration-200 hover:bg-surface-container-highest shadow-lg"
                         aria-label="Copy message"
                       >
                         <span className="material-symbols-outlined text-[14px] text-outline">
@@ -764,15 +766,16 @@ export default function ChatPage() {
                       </div>
                     )}
                   </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Typing indicator */}
-                  {loading && (
+                  {loading && !messages[messages.length - 1]?.streaming && (
                     <div className="flex justify-start animate-slide-in-left">
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mr-2 sm:mr-3 mt-1 flex-shrink-0 border border-primary/10">
                         <span className="material-symbols-outlined text-xs sm:text-sm text-primary/70">neurology</span>
                       </div>
-                      <div className="p-4 bg-[#1c2026]/80 rounded-2xl rounded-tl-md border border-outline-variant/10 flex gap-1.5 items-center">
+                      <div className="p-4 bg-surface-container/80 rounded-2xl rounded-tl-md border border-outline-variant/10 flex gap-1.5 items-center">
                         <span className="w-2 h-2 rounded-full bg-primary/40 animate-bounce-dot animate-bounce-dot-1" />
                         <span className="w-2 h-2 rounded-full bg-primary/40 animate-bounce-dot animate-bounce-dot-2" />
                         <span className="w-2 h-2 rounded-full bg-primary/40 animate-bounce-dot animate-bounce-dot-3" />
@@ -786,7 +789,7 @@ export default function ChatPage() {
             </div>
 
             {/* Input bar — pinned to bottom when messages exist */}
-            <div className="absolute left-0 right-0 bottom-0 px-3 sm:px-6 py-4 border-t border-outline-variant/10 bg-[#10141a]/95 backdrop-blur-xl z-20 w-full shadow-[0_-10px_30px_rgba(16,20,26,0.8)]">
+            <div className="absolute left-0 right-0 bottom-0 px-3 sm:px-6 py-4 border-t border-outline-variant/10 bg-background/95 backdrop-blur-xl z-20 w-full shadow-md">
               <ChatInput input={input} setInput={setInput} loading={loading} onSend={handleSend} />
             </div>
           </div>

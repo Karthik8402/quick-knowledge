@@ -36,10 +36,10 @@ export default function ChatInput({ input, setInput, loading, onSend }: ChatInpu
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="bg-[#131924]/80 backdrop-blur-xl border border-outline-variant/20 p-1.5 sm:p-2 rounded-2xl flex items-end gap-2 focus-within:border-primary/40 transition-all duration-300 shadow-xl">
+      <div className="bg-surface-container/50 backdrop-blur-xl border border-outline-variant/30 p-1.5 sm:p-2 rounded-2xl flex items-end gap-2 focus-within:border-primary/50 transition-all duration-300 shadow-xl">
         <textarea
           ref={inputRef}
-          className="flex-grow bg-transparent border-none focus:outline-none focus:ring-0 text-on-surface placeholder:text-outline/50 text-sm resize-none min-h-[44px] max-h-[160px] py-2.5 px-3 custom-scrollbar overflow-y-auto"
+          className="flex-grow bg-transparent border-none focus:outline-none focus:ring-0 text-on-surface placeholder:text-outline text-sm resize-none min-h-[44px] max-h-[160px] py-2.5 px-3 custom-scrollbar overflow-y-auto"
           placeholder="Ask a question about your documents…"
           value={input}
           rows={1}

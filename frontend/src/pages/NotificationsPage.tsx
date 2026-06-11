@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getSystemStatus } from '../api';
+import { useUsageStore } from '../services/usage';
+import type { SystemStatus } from '../types';
 
 type NotificationType = 'system' | 'documents' | 'alerts';
 
@@ -15,82 +18,122 @@ type Notification = {
 
 type FilterTab = 'all' | NotificationType;
 
-const INITIAL_NOTIFICATIONS: Notification[] = [
+const STATIC_SEEDS = [
   {
     id: 'n1',
-    type: 'system',
+    type: 'system' as const,
     icon: 'system_update',
     iconColor: 'text-primary',
     title: 'System Updated',
     description: 'Quick Knowledge has been updated to the latest version with performance improvements.',
     timestamp: new Date(Date.now() - 1800000),
-    read: false,
   },
   {
     id: 'n2',
-    type: 'documents',
+    type: 'documents' as const,
     icon: 'check_circle',
     iconColor: 'text-green-400',
     title: 'Document Processing Complete',
     description: 'Your uploaded document has been successfully chunked and indexed into the vector store.',
     timestamp: new Date(Date.now() - 3600000),
-    read: false,
-  },
-  {
-    id: 'n3',
-    type: 'alerts',
-    icon: 'warning',
-    iconColor: 'text-tertiary',
-    title: 'Usage Limit Warning',
-    description: 'You have used 80% of your daily AI query limit. Consider upgrading your plan for unlimited access.',
-    timestamp: new Date(Date.now() - 7200000),
-    read: false,
   },
   {
     id: 'n4',
-    type: 'system',
+    type: 'system' as const,
     icon: 'waving_hand',
     iconColor: 'text-secondary',
     title: 'Welcome to Quick Knowledge',
     description: 'Get started by uploading documents and chatting with your knowledge base.',
     timestamp: new Date(Date.now() - 86400000),
-    read: true,
   },
   {
     id: 'n5',
-    type: 'documents',
+    type: 'documents' as const,
     icon: 'auto_awesome',
     iconColor: 'text-primary',
     title: 'Embeddings Generated',
     description: 'Vector embeddings have been generated for all your uploaded documents.',
     timestamp: new Date(Date.now() - 172800000),
-    read: true,
   },
   {
     id: 'n6',
-    type: 'alerts',
+    type: 'alerts' as const,
     icon: 'security',
     iconColor: 'text-error',
     title: 'Security Notice',
     description: 'A new sign-in was detected from an unrecognized device. If this was you, no action is needed.',
     timestamp: new Date(Date.now() - 259200000),
-    read: true,
   },
 ];
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
+  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [readIds, setReadIds] = useState<string[]>(['n4', 'n5', 'n6']);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const { data: usageData, fetchUsageIfStale } = useUsageStore();
+
+  useEffect(() => {
+    fetchUsageIfStale();
+    getSystemStatus().then(setStatus).catch(() => null);
+  }, [fetchUsageIfStale]);
+
+  // Dynamically build notifications list
+  const notifications: Notification[] = [];
+
+  // 1. Vector Store check
+  if (status && !status.store_initialized) {
+    notifications.push({
+      id: 'n-sys-not-configured',
+      type: 'alerts',
+      icon: 'error',
+      iconColor: 'text-error',
+      title: 'System not configured',
+      description: 'The vector store is not initialized. Please verify configuration or initialize the DB in Settings.',
+      timestamp: new Date(),
+      read: readIds.includes('n-sys-not-configured'),
+    });
+  }
+
+  // 2. High Usage check
+  if (usageData && usageData.percentage > 80) {
+    notifications.push({
+      id: 'n-usage-limit-warning',
+      type: 'alerts',
+      icon: 'warning',
+      iconColor: 'text-tertiary',
+      title: 'Usage limit warning',
+      description: `You have consumed ${usageData.percentage}% of your daily AI limits. Free plan resets in 24 hours.`,
+      timestamp: new Date(),
+      read: readIds.includes('n-usage-limit-warning'),
+    });
+  }
+
+  // 3. Add static seeds
+  STATIC_SEEDS.forEach(seed => {
+    notifications.push({
+      ...seed,
+      read: readIds.includes(seed.id),
+    });
+  });
+
+  // Sort: unread first, then by timestamp descending
+  notifications.sort((a, b) => {
+    if (a.read !== b.read) {
+      return a.read ? 1 : -1;
+    }
+    return b.timestamp.getTime() - a.timestamp.getTime();
+  });
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const allIds = notifications.map(n => n.id);
+    setReadIds(allIds);
   };
 
   const toggleRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => (n.id === id ? { ...n, read: !n.read } : n))
+    setReadIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
 
@@ -153,7 +196,7 @@ export default function NotificationsPage() {
           >
             {f.label}
             {f.key !== 'all' && (
-              <span className="ml-1.5 text-[10px] opacity-70">
+              <span className="ml-1.5 text-[10px] opacity-70 font-bold">
                 {notifications.filter(n => f.key === 'all' || n.type === f.key).filter(n => !n.read).length}
               </span>
             )}

@@ -346,3 +346,31 @@ export async function getSystemConfig(): Promise<SystemConfig> {
   }
   return response.json() as Promise<SystemConfig>;
 }
+
+export async function getAnalyticsOverview(): Promise<{
+  total_documents: number;
+  total_chunks: number;
+  avg_chunks_per_doc: number;
+  usage: { used: number; limit: number; percentage: number; plan: string };
+  source_type_breakdown: Record<string, number>;
+  chunk_distribution: Record<string, number>;
+  upload_timeline: { date: string; count: number }[];
+  top_documents: { document_id: string; file_name: string; chunks: number; pages: number; created_at: string }[];
+}> {
+  return cachedGet('analytics/overview', async () => {
+    const res = await authFetch(`${API_BASE_URL}/analytics/overview`);
+    if (!res.ok) throw new Error('Failed to fetch analytics');
+    return res.json();
+  }, 30_000);
+}
+
+export async function getActivityFeed(limit = 20): Promise<{
+  events: { type: string; icon: string; title: string; description: string; timestamp: string; document_id: string }[];
+  total: number;
+}> {
+  return cachedGet(`analytics/activity?limit=${limit}`, async () => {
+    const res = await authFetch(`${API_BASE_URL}/analytics/activity?limit=${limit}`);
+    if (!res.ok) throw new Error('Failed to fetch activity');
+    return res.json();
+  }, 15_000);
+}
