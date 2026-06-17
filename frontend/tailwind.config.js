@@ -82,6 +82,14 @@ export default {
         "gradient-shift": "gradientShift 6s ease infinite",
         "toast-in": "slideToast 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
         "toast-out": "slideToastOut 0.3s ease-in both",
+        // Spatial UI 3D animations
+        "morph-blob": "morphBlob 18s ease-in-out infinite",
+        "orbit": "orbit 20s linear infinite",
+        "particle-drift": "particleDrift 20s ease-in-out infinite",
+        "glow-pulse": "glowPulse 2.5s ease-in-out infinite",
+        "perspective-float": "perspectiveFloat 6s ease-in-out infinite",
+        "border-glow-spatial": "borderGlowSpatial 3s ease-in-out infinite",
+        "pulse-ring": "pulseRing 1.5s ease-out forwards",
       },
       keyframes: {
         fadeInUp: {

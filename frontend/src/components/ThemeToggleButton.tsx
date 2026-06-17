@@ -1,20 +1,11 @@
 import { useTheme, type ThemePreference } from '../hooks/useTheme';
+import { Sun, Moon, Laptop } from 'lucide-react';
 
 interface ThemeToggleButtonProps {
   className?: string;
 }
 
 const THEME_CYCLE: ThemePreference[] = ['system', 'light', 'dark'];
-const THEME_ICON: Record<ThemePreference, string> = {
-  system: 'brightness_auto',
-  light: 'light_mode',
-  dark: 'dark_mode',
-};
-const THEME_LABEL: Record<ThemePreference, string> = {
-  system: 'Switch to light theme',
-  light: 'Switch to dark theme',
-  dark: 'Switch to system theme',
-};
 
 export function ThemeToggleButton({ className = '' }: ThemeToggleButtonProps) {
   const { theme, setTheme } = useTheme();
@@ -24,19 +15,24 @@ export function ThemeToggleButton({ className = '' }: ThemeToggleButtonProps) {
     setTheme(THEME_CYCLE[(idx + 1) % THEME_CYCLE.length]);
   };
 
-  const ariaLabel = THEME_LABEL[theme] || 'Toggle theme';
+  const ariaLabel = {
+    system: 'Switch to light theme',
+    light: 'Switch to dark theme',
+    dark: 'Switch to system theme',
+  }[theme] || 'Toggle theme';
 
   return (
     <button
       onClick={cycleTheme}
       type="button"
-      className={`w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors ${className}`}
+      className={`w-9 h-9 flex items-center justify-center rounded-lg border border-outline-variant/20 bg-surface/40 hover:bg-surface-container hover:text-on-surface text-outline transition-all duration-200 backdrop-blur-md cursor-pointer ${className}`}
       aria-label={ariaLabel}
       title={ariaLabel}
     >
-      <span className="material-symbols-outlined text-lg text-outline hover:text-on-surface transition-colors">
-        {THEME_ICON[theme]}
-      </span>
+      {theme === 'system' && <Laptop className="w-4 h-4" />}
+      {theme === 'light' && <Sun className="w-4 h-4" />}
+      {theme === 'dark' && <Moon className="w-4 h-4" />}
     </button>
   );
 }
+

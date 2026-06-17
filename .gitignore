@@ -42,8 +42,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-stitch_projects/*
-skills/*
+/stitch_projects/*
+/skills/*
 .temp/
 .mypy_cache/
 .cursor/
+/design-system/*
+frontend/.github/*

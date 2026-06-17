@@ -3,12 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/ui/Card';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ThemeToggleButton } from '../../components/ThemeToggleButton';
+import { AnimatedBackground } from '../../components/ui/AnimatedBackground';
+import { use3DTilt } from '../../hooks/use3DTilt';
+
+/* ── Spring configs (from ui-ux-pro-max) ── */
+const springEntrance = { type: 'spring' as const, damping: 20, stiffness: 90 };
+const springBounce = { type: 'spring' as const, damping: 25, stiffness: 120 };
 
 export default function ResetPasswordPage() {
   const { updateUserPassword } = useAuth();
@@ -17,6 +22,9 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [validatingSession, setValidatingSession] = useState(true);
+
+  // 3D tilt for the card
+  const { ref: cardRef, style: cardStyle } = use3DTilt({ maxTilt: 6, scale: 1.02, perspective: 1200 });
 
   // Supabase automatically captures the hash fragment when clicking an email link
   // and establishes a session. We just need to ensure the session exists.
@@ -63,62 +71,90 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden text-on-surface">
+      {/* Aurora animated background (matching other auth pages) */}
+      <AnimatedBackground variant="aurora" />
+
       <div className="fixed top-4 right-4 z-50">
         <ThemeToggleButton />
       </div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-green-600/10 rounded-full blur-[128px] pointer-events-none" />
 
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        ref={cardRef}
+        style={cardStyle}
+        initial={{ opacity: 0, y: 20, rotateX: 5 }}
+        animate={{ opacity: 1, y: 0, rotateX: 0 }}
+        transition={{ ...springEntrance }}
         className="w-full max-w-md relative z-10"
       >
-        <Card className="relative border-outline-variant/20 bg-surface-container/80 backdrop-blur-xl shadow-2xl">
-          <CardHeader className="space-y-2 text-center pb-6">
+        <div className="glass-card glass-card-glow p-6 sm:p-7">
+          {/* Header */}
+          <div className="space-y-2 text-center pb-6" style={{ transform: 'translateZ(25px)' }}>
             <div className="flex justify-center mb-4">
-              <div className="p-3 bg-green-500/10 rounded-2xl ring-1 ring-green-500/20">
+              <div className="p-3.5 bg-green-500/10 rounded-2xl ring-1 ring-green-500/20 glow-ring-animated">
                 <ShieldCheck className="w-6 h-6 text-green-400" />
               </div>
             </div>
-            <CardTitle className="text-2xl font-bold tracking-tight text-on-surface">Set new password</CardTitle>
-            <CardDescription className="text-zinc-400">
+            <h2 className="text-2xl font-bold tracking-tight text-on-surface font-headline">Set new password</h2>
+            <p className="text-sm text-on-surface-variant">
               Please enter your new password below
-            </CardDescription>
-          </CardHeader>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
-              <Input
-                label="New Password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                autoComplete="new-password"
-                disabled={loading}
-              />
-              <Input
-                label="Confirm New Password"
-                type="password"
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={6}
-                autoComplete="new-password"
-                disabled={loading}
-              />
-            </CardContent>
-            <CardFooter className="flex flex-col space-y-4 pt-4">
-              <Button type="submit" className="w-full" isLoading={loading}>
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ transform: 'translateZ(15px)' }}>
+            <div className="space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...springBounce, delay: 0.15 }}
+              >
+                <Input
+                  label="New Password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  disabled={loading}
+                />
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...springBounce, delay: 0.22 }}
+              >
+                <Input
+                  label="Confirm New Password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  disabled={loading}
+                />
+              </motion.div>
+            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...springBounce, delay: 0.29 }}
+              className="pt-5"
+              style={{ transform: 'translateZ(30px)' }}
+            >
+              <Button
+                type="submit"
+                className="w-full cursor-pointer transition-transform duration-200 hover:scale-[1.02] active:scale-[0.97]"
+                isLoading={loading}
+              >
                 Update Password
               </Button>
-            </CardFooter>
+            </motion.div>
           </form>
-        </Card>
+        </div>
       </motion.div>
     </div>
   );

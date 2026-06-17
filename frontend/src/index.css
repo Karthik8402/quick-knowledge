@@ -226,10 +226,10 @@
 
 @keyframes float {
   0%, 100% {
-    transform: translateY(0px);
+    transform: translate3d(0, 0, 0);
   }
   50% {
-    transform: translateY(-12px);
+    transform: translate3d(0, -12px, 0);
   }
 }
 
@@ -310,6 +310,111 @@
 @keyframes progressBar {
   from { width: 100%; }
   to { width: 0%; }
+}
+
+/* ── 3D Spatial UI Keyframes ── */
+
+@keyframes morphBlob {
+  0%, 100% {
+    border-radius: 40% 60% 60% 40% / 60% 30% 70% 40%;
+    transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+  }
+  25% {
+    border-radius: 60% 40% 30% 70% / 40% 60% 40% 60%;
+    transform: translate3d(30px, -20px, 0) scale3d(1.05, 1.05, 1);
+  }
+  50% {
+    border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%;
+    transform: translate3d(-20px, 20px, 0) scale3d(0.95, 0.95, 1);
+  }
+  75% {
+    border-radius: 50% 40% 50% 60% / 35% 50% 65% 50%;
+    transform: translate3d(15px, 10px, 0) scale3d(1.02, 1.02, 1);
+  }
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes particleDrift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate3d(0, 1, 0, 0deg);
+  }
+  25% {
+    transform: translate3d(20px, -30px, 0) rotate3d(1, 0, 0, 15deg);
+  }
+  50% {
+    transform: translate3d(-15px, -10px, 0) rotate3d(0, 1, 1, 25deg);
+  }
+  75% {
+    transform: translate3d(10px, 20px, 0) rotate3d(1, 1, 0, 10deg);
+  }
+}
+
+@keyframes meshDrift1 {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  33% { transform: translate3d(8%, -6%, 0); }
+  66% { transform: translate3d(-5%, 8%, 0); }
+}
+
+@keyframes meshDrift2 {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  33% { transform: translate3d(-10%, 5%, 0); }
+  66% { transform: translate3d(6%, -8%, 0); }
+}
+
+@keyframes meshDrift3 {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  33% { transform: translate3d(5%, 10%, 0); }
+  66% { transform: translate3d(-8%, -5%, 0); }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(var(--color-primary), 0.15), 0 0 30px rgba(var(--color-primary), 0.05);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(var(--color-primary), 0.3), 0 0 50px rgba(var(--color-primary), 0.1);
+  }
+}
+
+@keyframes perspectiveFloat {
+  0%, 100% {
+    transform: translate3d(0, 0px, 0) rotateX(0deg) rotateY(0deg);
+  }
+  25% {
+    transform: translate3d(0, -8px, 0) rotateX(2deg) rotateY(-1deg);
+  }
+  50% {
+    transform: translate3d(0, -12px, 0) rotateX(-1deg) rotateY(2deg);
+  }
+  75% {
+    transform: translate3d(0, -5px, 0) rotateX(1deg) rotateY(-1.5deg);
+  }
+}
+
+@keyframes borderGlowSpatial {
+  0%, 100% {
+    border-color: rgba(var(--color-primary), 0.1);
+    box-shadow: 0 0 0 0 rgba(var(--color-primary), 0);
+  }
+  50% {
+    border-color: rgba(var(--color-primary), 0.3);
+    box-shadow: 0 0 20px rgba(var(--color-primary), 0.08);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
 }
 
 /* ================================================================
@@ -452,6 +557,90 @@
     background-size: 200% 100%;
     animation: shimmer 1.8s ease-in-out infinite;
     border-radius: 8px;
+  }
+
+  /* ── Spatial UI / 3D Utilities ── */
+
+  /* Glassmorphism card — VisionOS style */
+  .glass-card {
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    background: rgba(var(--color-surface-container), 0.65);
+    border: 1px solid rgba(var(--color-outline-variant), 0.15);
+    border-radius: 24px;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.08),
+      0 2px 8px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .dark .glass-card {
+    background: rgba(var(--color-surface-container), 0.5);
+    border-color: rgba(var(--color-outline-variant), 0.12);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.25),
+      0 2px 8px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .glass-card-glow {
+    animation: borderGlowSpatial 3s ease-in-out infinite;
+  }
+
+  /* 3D transform helpers */
+  .perspective-800 { perspective: 800px; }
+  .perspective-1000 { perspective: 1000px; }
+  .perspective-1200 { perspective: 1200px; }
+  .perspective-1500 { perspective: 1500px; }
+  .preserve-3d { transform-style: preserve-3d; }
+  .backface-hidden { backface-visibility: hidden; }
+
+  /* Gradient text — animated shimmer */
+  .gradient-text {
+    background: linear-gradient(
+      135deg,
+      rgb(var(--color-primary)) 0%,
+      rgb(var(--color-secondary)) 40%,
+      rgb(var(--color-primary)) 60%,
+      rgb(var(--color-tertiary)) 100%
+    );
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradientShift 8s ease infinite;
+  }
+
+  /* Glow ring — for focus/hover emphasis */
+  .glow-ring {
+    box-shadow: 0 0 15px rgba(var(--color-primary), 0.2), 0 0 30px rgba(var(--color-primary), 0.05);
+  }
+
+  .glow-ring-animated {
+    animation: glowPulse 2.5s ease-in-out infinite;
+  }
+
+  /* Perspective float for mobile fallback */
+  .animate-perspective-float {
+    animation: perspectiveFloat 6s ease-in-out infinite;
+  }
+
+  /* Pulse ring for success states */
+  .pulse-ring {
+    animation: pulseRing 1.5s ease-out forwards;
+  }
+}
+
+/* ================================================================
+   REDUCED MOTION — Respect user preference (UX guideline: HIGH severity)
+   ================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
