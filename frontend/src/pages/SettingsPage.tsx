@@ -1,24 +1,27 @@
 import { useEffect, useState } from 'react';
-import { getSettings, updateSettings } from '../api';
+import { useAppData } from '../hooks/useAppData';
 import type { Settings } from '../types';
 import { showToast } from '../shared/Toast';
 
 import { MODEL_CONFIG, VECTOR_STORES, EMBEDDING_MODELS } from '../config/branding';
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const { settings, updateSettingsInContext } = useAppData();
+  const [localSettings, setLocalSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    void getSettings().then(setSettings).catch(console.error);
-  }, []);
+    if (settings) {
+      setLocalSettings(settings);
+    }
+  }, [settings]);
 
   const handleSave = async () => {
-    if (!settings) return;
+    if (!localSettings) return;
     setSaving(true);
     try {
-      await updateSettings(settings);
-      showToast('success', 'Settings Applied', 'Configuration updated in memory (resets on server restart)');
+      await updateSettingsInContext(localSettings);
+      showToast('success', 'Settings Applied', 'Configuration updated and saved to database.');
     } catch (e: any) {
       showToast('error', 'Update Failed', e.message);
     } finally {
@@ -26,7 +29,7 @@ export default function SettingsPage() {
     }
   };
 
-  if (!settings) return (
+  if (!localSettings) return (
     <div className="flex flex-col gap-6 max-w-3xl animate-fade-in-up">
       <h3 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight mb-2">Engine Settings</h3>
       <div className="bg-surface-container/40 border border-outline-variant/15 p-5 sm:p-8 rounded-2xl sm:rounded-3xl space-y-6">
@@ -44,7 +47,7 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-4 sm:gap-6 max-w-3xl">
       <div className="animate-fade-in-up">
         <h3 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight mb-2">Engine Settings</h3>
-        <p className="text-on-surface-variant text-sm">Configure the RAG pipeline parameters. Changes apply in memory until server restart.</p>
+        <p className="text-on-surface-variant text-sm">Configure the RAG pipeline parameters. Changes are stored in the database and persist across server restarts.</p>
       </div>
       
       <div className="bg-surface-container/40 border border-outline-variant/15 p-5 sm:p-8 rounded-2xl sm:rounded-3xl backdrop-blur-xl space-y-6 sm:space-y-7 animate-scale-in" style={{ animationDelay: '0.1s' }}>
@@ -59,10 +62,10 @@ export default function SettingsPage() {
               <input
                 type="number"
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300"
-                value={settings.rag_top_k}
+                value={localSettings.rag_top_k}
                 min={1}
                 max={20}
-                onChange={(e) => setSettings({ ...settings, rag_top_k: Number(e.target.value) })}
+                onChange={(e) => setLocalSettings({ ...localSettings, rag_top_k: Number(e.target.value) })}
               />
               <p className="text-xs text-on-surface-variant mt-2">How many chunks are injected into the LLM context.</p>
             </div>
@@ -75,10 +78,10 @@ export default function SettingsPage() {
               <input
                 type="number"
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300"
-                value={settings.rag_chunk_size}
+                value={localSettings.rag_chunk_size}
                 min={100}
                 max={4000}
-                onChange={(e) => setSettings({ ...settings, rag_chunk_size: Number(e.target.value) })}
+                onChange={(e) => setLocalSettings({ ...localSettings, rag_chunk_size: Number(e.target.value) })}
               />
               <p className="text-xs text-on-surface-variant mt-2">Target chunk size for text splitting.</p>
             </div>
@@ -91,10 +94,10 @@ export default function SettingsPage() {
               <input
                 type="number"
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300"
-                value={settings.rag_chunk_overlap}
+                value={localSettings.rag_chunk_overlap}
                 min={0}
                 max={1000}
-                onChange={(e) => setSettings({ ...settings, rag_chunk_overlap: Number(e.target.value) })}
+                onChange={(e) => setLocalSettings({ ...localSettings, rag_chunk_overlap: Number(e.target.value) })}
               />
               <p className="text-xs text-on-surface-variant mt-2">Overlap to keep continuity between chunks.</p>
             </div>
@@ -109,15 +112,15 @@ export default function SettingsPage() {
               </label>
               <select
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300 cursor-pointer"
-                value={settings.llm_provider}
+                value={localSettings.llm_provider}
                 onChange={(e) => {
                   const nextProvider = e.target.value;
                   const nextModels = MODEL_CONFIG[nextProvider]?.models || [];
-                  const currentModelId = settings.llm_model;
+                  const currentModelId = localSettings.llm_model;
                   const nextModel = nextModels.some(m => m.id === currentModelId)
                     ? currentModelId
                     : (nextModels[0]?.id || currentModelId);
-                  setSettings({ ...settings, llm_provider: nextProvider, llm_model: nextModel });
+                  setLocalSettings({ ...localSettings, llm_provider: nextProvider, llm_model: nextModel });
                 }}
               >
                 {Object.entries(MODEL_CONFIG).map(([key, provider]) => (
@@ -133,15 +136,15 @@ export default function SettingsPage() {
               </label>
               <select
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300 cursor-pointer"
-                value={settings.llm_model}
-                onChange={(e) => setSettings({ ...settings, llm_model: e.target.value })}
+                value={localSettings.llm_model}
+                onChange={(e) => setLocalSettings({ ...localSettings, llm_model: e.target.value })}
               >
-                {(MODEL_CONFIG[settings.llm_provider]?.models || []).map((model) => (
+                {(MODEL_CONFIG[localSettings.llm_provider]?.models || []).map((model) => (
                   <option key={model.id} value={model.id}>{model.name}</option>
                 ))}
                 {/* Fallback for models not in config */}
-                {!(MODEL_CONFIG[settings.llm_provider]?.models || []).some(m => m.id === settings.llm_model) && (
-                  <option value={settings.llm_model}>{settings.llm_model} (custom)</option>
+                {!(MODEL_CONFIG[localSettings.llm_provider]?.models || []).some(m => m.id === localSettings.llm_model) && (
+                  <option value={localSettings.llm_model}>{localSettings.llm_model} (custom)</option>
                 )}
               </select>
             </div>
@@ -153,14 +156,14 @@ export default function SettingsPage() {
               </label>
               <select
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300 cursor-pointer"
-                value={settings.embedding_model}
-                onChange={(e) => setSettings({ ...settings, embedding_model: e.target.value })}
+                value={localSettings.embedding_model}
+                onChange={(e) => setLocalSettings({ ...localSettings, embedding_model: e.target.value })}
               >
                 {EMBEDDING_MODELS.map((model) => (
                   <option key={model.id} value={model.id}>{model.name}</option>
                 ))}
-                {!EMBEDDING_MODELS.some(m => m.id === settings.embedding_model) && (
-                  <option value={settings.embedding_model}>{settings.embedding_model} (custom)</option>
+                {!EMBEDDING_MODELS.some(m => m.id === localSettings.embedding_model) && (
+                  <option value={localSettings.embedding_model}>{localSettings.embedding_model} (custom)</option>
                 )}
               </select>
             </div>
@@ -172,8 +175,8 @@ export default function SettingsPage() {
               </label>
               <select
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300 cursor-pointer"
-                value={settings.vector_store}
-                onChange={(e) => setSettings({ ...settings, vector_store: e.target.value })}
+                value={localSettings.vector_store}
+                onChange={(e) => setLocalSettings({ ...localSettings, vector_store: e.target.value })}
               >
                 {VECTOR_STORES.map((store) => (
                   <option key={store.id} value={store.id}>{store.name}</option>
@@ -197,8 +200,8 @@ export default function SettingsPage() {
                 min={0}
                 max={1}
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300"
-                value={settings.llm_temperature}
-                onChange={(e) => setSettings({ ...settings, llm_temperature: Number(e.target.value) })}
+                value={localSettings.llm_temperature}
+                onChange={(e) => setLocalSettings({ ...localSettings, llm_temperature: Number(e.target.value) })}
               />
             </div>
 
@@ -213,8 +216,8 @@ export default function SettingsPage() {
                 min={0}
                 max={1}
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300"
-                value={settings.llm_top_p}
-                onChange={(e) => setSettings({ ...settings, llm_top_p: Number(e.target.value) })}
+                value={localSettings.llm_top_p}
+                onChange={(e) => setLocalSettings({ ...localSettings, llm_top_p: Number(e.target.value) })}
               />
             </div>
           </div>
@@ -231,8 +234,8 @@ export default function SettingsPage() {
                 min={1}
                 max={200}
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300"
-                value={settings.max_upload_size_mb}
-                onChange={(e) => setSettings({ ...settings, max_upload_size_mb: Number(e.target.value) })}
+                value={localSettings.max_upload_size_mb}
+                onChange={(e) => setLocalSettings({ ...localSettings, max_upload_size_mb: Number(e.target.value) })}
               />
             </div>
           </div>
@@ -257,8 +260,8 @@ export default function SettingsPage() {
         <div className="flex items-start gap-3">
           <span className="material-symbols-outlined text-primary/60 text-lg mt-0.5 flex-shrink-0">info</span>
           <div className="text-xs text-on-surface-variant leading-relaxed space-y-1">
-            <p><strong className="text-on-surface">In-memory only:</strong> Settings changes do not persist across server restarts.</p>
-            <p>To make permanent changes, update your <code className="bg-surface-container-highest px-1.5 py-0.5 rounded text-primary text-[11px]">.env</code> file in the backend directory.</p>
+            <p><strong className="text-on-surface">Database-backed:</strong> Settings changes survive server restarts.</p>
+            <p>Model configuration overrides are loaded directly from the database after initialization.</p>
           </div>
         </div>
       </div>

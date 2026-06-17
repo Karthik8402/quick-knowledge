@@ -1,28 +1,13 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { listDocuments, getSystemStatus } from '../api';
-import type { DocumentMetadata, SystemStatus } from '../types';
+import { useAppData } from '../hooks/useAppData';
 import { BRAND } from '../config/branding';
-import { useUsageStore } from '../services/usage';
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
-  const [status, setStatus] = useState<SystemStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { documents, status, usage: usageData, loading } = useAppData();
 
   const profileName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
-
-  const { data: usageData, fetchUsageIfStale } = useUsageStore();
-
-  useEffect(() => {
-    fetchUsageIfStale();
-    Promise.all([
-      listDocuments().then(setDocuments).catch(() => setDocuments([])),
-      getSystemStatus().then(setStatus).catch(() => null),
-    ]).finally(() => setLoading(false));
-  }, [fetchUsageIfStale]);
 
   const totalChunks = documents.reduce((s, d) => s + d.chunks, 0);
   const recentDocs = [...documents].sort((a, b) =>

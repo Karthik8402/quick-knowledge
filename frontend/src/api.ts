@@ -1,5 +1,19 @@
 import { getAccessToken } from './lib/supabase';
-import type { ChatMessage, ChatResponse, ChunksResponse, Citation, DocumentMetadata, Settings, SystemStatus, UploadResult, UsageResponse, SystemConfig } from './types';
+import type {
+  ChatMessage,
+  ChatResponse,
+  ChunksResponse,
+  Citation,
+  DocumentMetadata,
+  Settings,
+  SystemStatus,
+  UploadResult,
+  UsageResponse,
+  SystemConfig,
+  SessionInfo,
+  SessionsResponse,
+  NotificationsResponse
+} from './types';
 import API_BASE_URL from './config/api';
 
 const GET_CACHE_TTL_MS = 10_000;
@@ -329,6 +343,17 @@ export async function getHealth(): Promise<Record<string, unknown>> {
   }, HEALTH_CACHE_TTL_MS);
 }
 
+export async function getHealthDetails(): Promise<Record<string, unknown>> {
+  return cachedGet('GET /health/details', async () => {
+    const response = await authFetch(`${API_BASE_URL}/health/details`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || errorData?.error || 'Failed to get health details');
+    }
+    return response.json();
+  }, HEALTH_CACHE_TTL_MS);
+}
+
 export async function getUsage(): Promise<UsageResponse> {
   const response = await authFetch(`${API_BASE_URL}/usage`);
   if (!response.ok) {
@@ -338,13 +363,17 @@ export async function getUsage(): Promise<UsageResponse> {
   return response.json() as Promise<UsageResponse>;
 }
 
+const CONFIG_CACHE_TTL_MS = 300_000;
+
 export async function getSystemConfig(): Promise<SystemConfig> {
-  const response = await authFetch(`${API_BASE_URL}/system/config`);
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.detail || errorData?.error || 'Failed to get system config');
-  }
-  return response.json() as Promise<SystemConfig>;
+  return cachedGet('GET /system/config', async () => {
+    const response = await authFetch(`${API_BASE_URL}/system/config`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || errorData?.error || 'Failed to get system config');
+    }
+    return response.json() as Promise<SystemConfig>;
+  }, CONFIG_CACHE_TTL_MS);
 }
 
 export async function getAnalyticsOverview(): Promise<{
@@ -375,47 +404,6 @@ export async function getActivityFeed(limit = 20): Promise<{
   }, 15_000);
 }
 
-export interface SessionInfo {
-  session_id: string;
-  is_current: boolean;
-  status: string;
-  user_id: string;
-  is_anonymous: boolean;
-  auth_backend: string;
-  last_activity: string | null;
-  first_seen: string | null;
-  document_count: number;
-  created_at: string;
-}
-
-export interface SessionsResponse {
-  sessions: SessionInfo[];
-  total: number;
-  active_count: number;
-  note: string;
-}
-
-export interface NotificationAction {
-  label: string;
-  href: string;
-}
-
-export interface NotificationItem {
-  id: string;
-  type: 'critical' | 'warning' | 'info';
-  icon: string;
-  title: string;
-  body: string;
-  timestamp: string;
-  dismissible: boolean;
-  action: NotificationAction | null;
-}
-
-export interface NotificationsResponse {
-  notifications: NotificationItem[];
-  total: number;
-  unread_count: number;
-}
 
 export async function getSessions(): Promise<SessionsResponse> {
   const response = await authFetch(`${API_BASE_URL}/user/sessions`);
@@ -423,6 +411,24 @@ export async function getSessions(): Promise<SessionsResponse> {
     throw new Error('Failed to get sessions');
   }
   return response.json();
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  const response = await authFetch(`${API_BASE_URL}/user/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to revoke session');
+  }
+}
+
+export async function revokeAllOtherSessions(): Promise<void> {
+  const response = await authFetch(`${API_BASE_URL}/user/sessions`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to revoke other sessions');
+  }
 }
 
 export async function getNotifications(): Promise<NotificationsResponse> {

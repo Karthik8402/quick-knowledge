@@ -1,6 +1,4 @@
-import { useEffect, useState } from 'react';
-import { getSystemStatus } from '../api';
-import type { SystemStatus } from '../types';
+import { useAppData } from '../hooks/useAppData';
 import { BRAND } from '../config/branding';
 
 type TechItem = {
@@ -22,15 +20,7 @@ const TECH_STACK: TechItem[] = [
 ];
 
 export default function AboutPage() {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getSystemStatus()
-      .then(setStatus)
-      .catch(() => null)
-      .finally(() => setLoading(false));
-  }, []);
+  const { status, loading } = useAppData();
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in-up">

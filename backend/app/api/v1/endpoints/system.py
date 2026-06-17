@@ -21,7 +21,7 @@ from app.dependencies import (
     get_registry,
     get_vector_store_optional,
 )
-from app.schemas import SettingsResponse, SettingsUpdate, StatusResponse
+from app.schemas import HealthResponse, SettingsResponse, SettingsUpdate, StatusResponse
 from app.services.usage_service import UsageService
 
 logger = logging.getLogger(__name__)
@@ -30,13 +30,61 @@ router = APIRouter(tags=["system"])
 _start_time = time.time()
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse)
 @router.head("/health")
 def health(
     vector_store: Any = Depends(get_vector_store_optional),
     embeddings: Any = Depends(get_embeddings_instance),
 ) -> dict:
-    """Deep health check — remains public for load balancers and uptime monitors."""
+    """Public health check returning only {"status": "ok"/"degraded"}."""
+    settings = get_settings()
+
+    checks: dict[str, Any] = {
+        "vector_store": vector_store is not None,
+        "embeddings": embeddings is not None,
+    }
+
+    # Check Supabase connectivity when using supabase backend
+    if settings.storage_backend == "supabase":
+        try:
+            from app.core.supabase import get_supabase_client
+
+            client = get_supabase_client()
+            client.table("documents").select("id").limit(1).execute()
+            checks["supabase_connection"] = True
+        except Exception:
+            checks["supabase_connection"] = False
+
+    # Check disk space in local mode
+    if settings.storage_backend == "local":
+        try:
+            data_dir = Path(settings.upload_dir).parent
+            if data_dir.exists():
+                disk = shutil.disk_usage(str(data_dir))
+                disk_free_mb = disk.free / (1024 * 1024)
+                checks["disk_space_ok"] = disk_free_mb > 100
+            else:
+                checks["disk_space_ok"] = False
+        except Exception:
+            checks["disk_space_ok"] = False
+
+    overall = all(v for k, v in checks.items() if isinstance(v, bool))
+    return {"status": "ok" if overall else "degraded"}
+
+
+@router.get("/health/details")
+def health_details(
+    vector_store: Any = Depends(get_vector_store_optional),
+    embeddings: Any = Depends(get_embeddings_instance),
+    user: UserContext = Depends(get_current_user),
+) -> dict:
+    """Detailed health check for admin users only."""
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required to view health details",
+        )
+
     settings = get_settings()
 
     checks: dict[str, Any] = {
@@ -173,27 +221,14 @@ def update_settings(
 
     settings = get_settings()
 
-    # Apply in-memory updates (does not persist to .env)
-    if updates.rag_top_k is not None:
-        settings.rag_top_k = updates.rag_top_k
-    if updates.rag_chunk_size is not None:
-        settings.rag_chunk_size = updates.rag_chunk_size
-    if updates.rag_chunk_overlap is not None:
-        settings.rag_chunk_overlap = updates.rag_chunk_overlap
-    if updates.llm_provider is not None:
-        settings.llm_provider = updates.llm_provider
-    if updates.llm_model is not None:
-        settings.llm_model = updates.llm_model
-    if updates.llm_temperature is not None:
-        settings.llm_temperature = updates.llm_temperature
-    if updates.llm_top_p is not None:
-        settings.llm_top_p = updates.llm_top_p
-    if updates.embedding_model is not None:
-        settings.embedding_model = updates.embedding_model
-    if updates.vector_store is not None:
-        settings.vector_store = updates.vector_store
-    if updates.max_upload_size_mb is not None:
-        settings.max_upload_size_mb = updates.max_upload_size_mb
+    # Apply and persist updates to database
+    from app.services.platform_settings_service import PlatformSettingsService
+
+    updated_by = user.email or user.user_id or "admin"
+    updates_dict = updates.model_dump(exclude_unset=True)
+    for key, value in updates_dict.items():
+        if value is not None:
+            PlatformSettingsService.save_setting(key, value, updated_by)
 
     logger.info(
         "Settings updated by user=%s: top_k=%d, llm=%s, vs=%s",

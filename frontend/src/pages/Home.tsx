@@ -238,7 +238,7 @@ export default function HomePage() {
 
       <main>
         {/* ═══ SECTION 1: Full-screen Interactive Hero ═══ */}
-        <section className="relative mx-auto grid max-w-7xl gap-10 px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:px-8 lg:pb-24 lg:pt-24">
+        <section className="relative mx-auto grid max-w-7xl gap-10 px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:px-8 lg:pb-24 lg:pt-24">
           <motion.div
             style={{ y: heroY, opacity: heroOpacity }}
             className="flex flex-col justify-center perspective-1200"
@@ -259,7 +259,7 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...springEntrance, delay: 0.05 }}
-              className="gradient-text max-w-3xl font-headline text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-5xl xl:text-6xl"
+              className="gradient-text max-w-3xl font-headline text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-4xl xl:text-5xl 2xl:text-6xl"
               style={{ transform: 'translateZ(40px)' }}
             >
               Turn your documents into a fast, searchable knowledge workspace.

@@ -82,6 +82,10 @@ def grade_node(state: RAGState) -> RAGState:
         state.fallback = True
         return state
 
+    # Retrieval debug: log all scores
+    scores = [round(score, 4) for _, score in state.retrieved_docs]
+    logger.info("Retrieval debug: top-k scores = %s", scores)
+
     # Keep chunks with relevance score above threshold
     RELEVANCE_THRESHOLD = 0.3
     relevant = []

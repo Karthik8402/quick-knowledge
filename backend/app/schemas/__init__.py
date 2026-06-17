@@ -25,6 +25,7 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     document_ids: list[str] | None = None
     history: list[dict] | None = None
+    session_id: str | None = None
 
     @field_validator("question")
     @classmethod

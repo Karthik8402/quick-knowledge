@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getSystemConfig } from '../api';
-import type { SystemConfig } from '../types';
+import { useAppData } from '../hooks/useAppData';
 
 type ModelCardData = {
   icon: string;
@@ -12,15 +10,8 @@ type ModelCardData = {
 };
 
 export default function ModelsPage() {
-  const [config, setConfig] = useState<SystemConfig | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { systemConfig: config, loading } = useAppData();
 
-  useEffect(() => {
-    getSystemConfig()
-      .then(setConfig)
-      .catch(() => null)
-      .finally(() => setLoading(false));
-  }, []);
 
   const models: ModelCardData[] = config
     ? [

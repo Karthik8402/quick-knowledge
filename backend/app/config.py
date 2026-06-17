@@ -1,13 +1,39 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class RuntimeSettings:
+    _overrides: dict[str, Any] = {}
+
+    @classmethod
+    def set(cls, key: str, value: Any) -> None:
+        cls._overrides[key] = value
+
+    @classmethod
+    def get_all(cls) -> dict[str, Any]:
+        return cls._overrides
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore", frozen=False
     )
+
+    def __getattribute__(self, name: str) -> Any:
+        try:
+            # Access model_fields from the class to avoid Pydantic instance attribute deprecation warnings.
+            # Use object.__getattribute__(self, "__class__") to avoid infinite recursion.
+            self_class = object.__getattribute__(self, "__class__")
+            model_fields = self_class.model_fields
+            if name in model_fields:
+                if name in RuntimeSettings._overrides:
+                    return RuntimeSettings._overrides[name]
+        except AttributeError:
+            pass
+        return object.__getattribute__(self, name)
 
     # ── LLM / Embedding ──
     llm_provider: str = "google"

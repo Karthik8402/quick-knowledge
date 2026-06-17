@@ -67,6 +67,16 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Intelligent Knowledge Base API …")
+
+    # Load and apply platform database settings overrides
+    try:
+        from app.services.platform_settings_service import PlatformSettingsService
+
+        PlatformSettingsService.load_and_apply_settings()
+        logger.info("Database-backed platform settings applied successfully")
+    except Exception as e:
+        logger.warning("Failed to load platform settings from database: %s", e)
+
     settings = get_settings()
 
     logger.info(

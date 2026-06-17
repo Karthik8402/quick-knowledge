@@ -70,7 +70,9 @@ class ThrottledGoogleEmbeddings(GoogleGenerativeAIEmbeddings):
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
-            logger.info("Embedding batch of %d texts (index %d to %d)...", len(batch), i, i + len(batch))
+            logger.info(
+                "Embedding batch of %d texts (index %d to %d)...", len(batch), i, i + len(batch)
+            )
             embeddings = _embed_batch(batch)
             all_embeddings.extend(embeddings)
             if i + batch_size < len(texts):
@@ -314,17 +316,11 @@ def stream_answer_with_citations(
     collected: list[str] = []
 
     def token_generator():
-        try:
-            for chunk in llm.stream(messages):
-                token = _extract_text(chunk.content)
-                if token:
-                    collected.append(token)
-                    yield token
-        except Exception:
-            if not collected:
-                yield FALLBACK_ANSWER
-            else:
-                raise
+        for chunk in llm.stream(messages):
+            token = _extract_text(chunk.content)
+            if token:
+                collected.append(token)
+                yield token
 
     def get_citations() -> list[int]:
         """Parse citation indices from the fully-collected stream buffer.

@@ -66,43 +66,10 @@ class ChatService:
     def _infer_document_filter(question: str, reg, owner_id: str) -> list[str] | None:
         """Infer document filter from question text and available document filenames.
 
-        Matches if any keyword appears in:
-          1. The user's question (lowercased), OR
-          2. Any document filename owned by the user (lowercased).
-
-        This ensures 'explain the refund policy' still routes correctly when
-        the document is named 'refund_policy_2025.pdf' even if 'policy' is
-        not mentioned by the user.
+        Always returns None to trust vector similarity and prevent false negatives
+        when document names are generic.
         """
-        _KEYWORDS = (
-            "resume",
-            "cv",
-            "policy",
-            "report",
-            "invoice",
-            "contract",
-            "manual",
-            "spec",
-            "whitepaper",
-        )
-        q = question.lower()
-        question_keywords = {kw for kw in _KEYWORDS if kw in q}
-
-        docs = reg.list_documents(owner_id=owner_id) or []
-
-        matched: list[str] = []
-        for doc in docs:
-            fname = (doc.get("file_name") or "").lower()
-            doc_id = doc.get("document_id")
-            if not doc_id:
-                continue
-            # Match if keyword appears in question OR in the document's filename.
-            if any(kw in fname for kw in _KEYWORDS) and (
-                any(kw in q for kw in _KEYWORDS) or any(kw in fname for kw in question_keywords)
-            ):
-                matched.append(doc_id)
-
-        return matched or None
+        return None
 
     @staticmethod
     def build_chat_response(
@@ -185,7 +152,7 @@ class ChatService:
                     )
                 )
 
-        if not citations and state.relevant_docs:
+        if not citations and state.relevant_docs and answer_text.strip() != FALLBACK_ANSWER:
             # Fallback citation if model omitted it but context was used
             doc, score = state.relevant_docs[0]
             meta = doc.metadata or {}
@@ -212,6 +179,7 @@ class ChatService:
         owner_id: str,
         document_ids: list[str] | None = None,
         history: list[dict] | None = None,
+        session_id: str | None = None,
     ):
         if history:
             for turn in history:
@@ -272,18 +240,34 @@ class ChatService:
             settings.llm_max_tokens or "default",
         )
 
+        accumulated_text = ""
+        saved_history = False
         try:
             started = time.perf_counter()
             streamed_chars = 0
             result = stream_answer_with_citations(question, state.relevant_docs, history=history)
 
-            # ── Consume tokens FIRST, THEN resolve citations ──
-            # StreamResult.get_citations() is a deferred resolver that parses
-            # the full collected buffer.  It returns [] if called before the
-            # generator is exhausted — so this order is critical.
-            for token in result.tokens:
-                streamed_chars += len(token)
-                yield {"event": "token", "data": token}
+            try:
+                for token in result.tokens:
+                    streamed_chars += len(token)
+                    accumulated_text += token
+                    yield {"event": "token", "data": token}
+            finally:
+                if session_id and accumulated_text and not saved_history:
+                    try:
+                        from app.services.chat_history_service import ChatHistoryService
+
+                        ChatHistoryService.save_turns(
+                            owner_id,
+                            session_id,
+                            [
+                                {"role": "user", "content": question},
+                                {"role": "assistant", "content": accumulated_text},
+                            ],
+                        )
+                        saved_history = True
+                    except Exception as e:
+                        logger.warning("Failed to save partial stream history: %s", e)
 
             if streamed_chars == 0:
                 logger.warning("LLM stream returned 0 chars; falling back to non-stream response")
@@ -295,6 +279,24 @@ class ChatService:
                     fallback_answer = ChatService._extractive_fallback(state.relevant_docs)
                 yield {"event": "token", "data": fallback_answer}
                 streamed_chars = len(fallback_answer)
+                accumulated_text = fallback_answer
+
+                if session_id and not saved_history:
+                    try:
+                        from app.services.chat_history_service import ChatHistoryService
+
+                        ChatHistoryService.save_turns(
+                            owner_id,
+                            session_id,
+                            [
+                                {"role": "user", "content": question},
+                                {"role": "assistant", "content": accumulated_text},
+                            ],
+                        )
+                        saved_history = True
+                    except Exception as e:
+                        logger.warning("Failed to save fallback stream history: %s", e)
+
                 safe_indices = validate_citation_indices(
                     fallback_generation.get("citation_indices", []), len(state.relevant_docs)
                 )
@@ -304,7 +306,11 @@ class ChatService:
                     result.get_citations(), len(state.relevant_docs)
                 )
 
-            if not safe_indices and state.relevant_docs:
+            if (
+                not safe_indices
+                and state.relevant_docs
+                and accumulated_text.strip() != FALLBACK_ANSWER
+            ):
                 safe_indices = [1]
                 logger.info("LLM stream response: no citations found, defaulting to Source 1")
             final_citations = [

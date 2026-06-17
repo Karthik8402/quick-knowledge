@@ -43,6 +43,19 @@ def clean_test_registry():
 
 
 # ---------------------------------------------------------------------------
+# Clear RuntimeSettings overrides between tests to avoid state pollution
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def clear_runtime_settings():
+    """Clear RuntimeSettings overrides to keep tests isolated."""
+    from app.config import RuntimeSettings
+
+    RuntimeSettings._overrides.clear()
+    yield
+    RuntimeSettings._overrides.clear()
+
+
+# ---------------------------------------------------------------------------
 # Document factory
 # ---------------------------------------------------------------------------
 def make_document(

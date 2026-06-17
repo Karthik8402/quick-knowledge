@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getSystemStatus, getHealth } from '../api';
+import { useAppData } from '../hooks/useAppData';
+import { getHealthDetails } from '../api';
+
 import type { SystemStatus } from '../types';
 import { StatusSkeleton } from '../shared/Skeleton';
 
@@ -37,13 +39,13 @@ type HealthData = {
 };
 
 export default function StatusPage() {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const { status } = useAppData();
   const [health, setHealth] = useState<HealthData | null>(null);
 
   useEffect(() => {
-    void getSystemStatus().then(setStatus).catch(console.error);
-    void getHealth().then(d => setHealth(d as HealthData)).catch(console.error);
+    void getHealthDetails().then(d => setHealth(d as HealthData)).catch(console.error);
   }, []);
+
 
   const formatUptime = (seconds: number) => {
     if (seconds < 60) return `${seconds}s`;

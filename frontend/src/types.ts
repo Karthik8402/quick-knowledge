@@ -95,3 +95,48 @@ export type SystemConfig = {
   embedding_model: string;
   vector_store: string;
 };
+
+export interface NotificationAction {
+  label: string;
+  href: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  type: 'critical' | 'warning' | 'info';
+  icon: string;
+  title: string;
+  body: string;
+  timestamp: string;
+  dismissible: boolean;
+  action: NotificationAction | null;
+}
+
+export interface NotificationsResponse {
+  notifications: NotificationItem[];
+  total: number;
+  unread_count: number;
+}
+
+export interface SessionInfo {
+  session_id: string;
+  is_current: boolean;
+  status: string;
+  user_id: string;
+  is_anonymous: boolean;
+  auth_backend: string;
+  last_activity: string | null;
+  first_seen: string | null;
+  document_count: number;
+  created_at: string;
+  device: string;
+  ip: string;
+  last_seen_at: string;
+}
+
+export interface SessionsResponse {
+  sessions: SessionInfo[];
+  total: number;
+  active_count: number;
+  note: string;
+}

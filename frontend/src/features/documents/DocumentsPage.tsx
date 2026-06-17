@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { deleteDocument, getDocumentChunks, listDocuments, uploadDocuments } from '../../api';
+import { deleteDocument, getDocumentChunks, uploadDocuments } from '../../api';
 import type { DocumentMetadata, RawChunk } from '../../types';
 import ConfirmToast from '../../components/ui/ConfirmToast';
 import { showToast } from '../../shared/Toast';
 import { TableSkeleton } from '../../shared/Skeleton';
+import { useAppData } from '../../hooks/useAppData';
 
 export default function DocumentsPage() {
-  const [docs, setDocs] = useState<DocumentMetadata[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { documents: docs, loading, refreshDocuments } = useAppData();
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
@@ -17,22 +17,6 @@ export default function DocumentsPage() {
   const [chunksLoading, setChunksLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const fetchDocs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await listDocuments();
-      setDocs(data);
-      window.dispatchEvent(new CustomEvent('documents-changed'));
-    } catch (e: any) {
-      console.error(e);
-      showToast('error', 'Failed to load documents', e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void fetchDocs(); }, [fetchDocs]);
 
   /* ── Upload handler ── */
   const handleUpload = useCallback(async (files: File[]) => {
@@ -60,7 +44,7 @@ export default function DocumentsPage() {
     setUploading(true);
     try {
       const results = await uploadDocuments(files);
-      await fetchDocs();
+      await refreshDocuments();
       const indexed = results.filter((r) => r.status === 'indexed').length;
       const failed = results.filter((r) => r.status === 'failed').length;
       if (indexed > 0) showToast('success', `${indexed} file(s) indexed`, `${results.reduce((s, r) => s + r.chunks, 0)} chunks created`);
@@ -70,7 +54,7 @@ export default function DocumentsPage() {
     } finally {
       setUploading(false);
     }
-  }, [fetchDocs]);
+  }, [refreshDocuments]);
 
   /* ── Delete ── */
   const removeDoc = async (id: string, name: string) => {
@@ -79,7 +63,7 @@ export default function DocumentsPage() {
       await deleteDocument(id);
       showToast('success', 'Document Deleted', `${name} removed from knowledge base`);
       if (expandedId === id) { setExpandedId(null); setChunks([]); }
-      void fetchDocs();
+      void refreshDocuments();
     } catch (e: any) {
       showToast('error', 'Delete Failed', e.message);
     } finally {

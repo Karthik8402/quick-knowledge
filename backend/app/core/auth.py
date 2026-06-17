@@ -33,6 +33,7 @@ class UserContext:
     user_id: str
     email: str
     role: str = "authenticated"
+    session_id: str | None = None
 
 
 def _supabase_auth_url() -> str:
@@ -51,20 +52,25 @@ def _decode_kwargs(algorithms: list[str]) -> dict[str, Any]:
     return kwargs
 
 
-def _make_user_context(user_id: str, email: str, raw_role: str) -> UserContext:
+def _make_user_context(
+    user_id: str, email: str, raw_role: str, session_id: str | None = None
+) -> UserContext:
     settings = get_settings()
     role = raw_role
     if settings.admin_emails:
         admins = [e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()]
         if email.strip().lower() in admins:
             role = "admin"
-    return UserContext(user_id=user_id, email=email, role=role)
+    return UserContext(user_id=user_id, email=email, role=role, session_id=session_id)
 
 
 def _user_from_payload(payload: dict[str, Any]) -> UserContext:
     user_id = str(payload.get("sub") or payload.get("id") or "")
     email = str(payload.get("email") or "")
     role = str(payload.get("role") or payload.get("aud") or "authenticated")
+    session_id = payload.get("session_id")
+    if session_id:
+        session_id = str(session_id)
 
     if not user_id:
         raise HTTPException(
@@ -72,7 +78,7 @@ def _user_from_payload(payload: dict[str, Any]) -> UserContext:
             detail="Token missing user identity (sub)",
         )
 
-    return _make_user_context(user_id=user_id, email=email, raw_role=role)
+    return _make_user_context(user_id=user_id, email=email, raw_role=role, session_id=session_id)
 
 
 def _cache_expiry_for_token(token: str) -> float:
@@ -222,10 +228,15 @@ async def _verify_with_supabase_auth(token: str) -> UserContext:
                 detail="Supabase Auth response missing user id",
             )
 
+        session_id = data.get("session_id")
+        if session_id:
+            session_id = str(session_id)
+
         return _make_user_context(
             user_id=user_id,
             email=str(data.get("email") or ""),
             raw_role=str(data.get("role") or data.get("aud") or "authenticated"),
+            session_id=session_id,
         )
 
     if response.status_code in {401, 403}:
@@ -282,7 +293,9 @@ async def get_current_user(
     settings = get_settings()
 
     if not settings.auth_enabled:
-        return UserContext(user_id="anonymous", email="dev@localhost", role="admin")
+        return UserContext(
+            user_id="anonymous", email="dev@localhost", role="admin", session_id="dev-session-id"
+        )
 
     if credentials is None or not credentials.credentials:
         raise HTTPException(
@@ -302,7 +315,9 @@ async def get_optional_user(
     settings = get_settings()
 
     if not settings.auth_enabled:
-        return UserContext(user_id="anonymous", email="dev@localhost", role="admin")
+        return UserContext(
+            user_id="anonymous", email="dev@localhost", role="admin", session_id="dev-session-id"
+        )
 
     if credentials is None or not credentials.credentials:
         return None

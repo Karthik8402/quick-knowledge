@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { listDocuments } from '../api';
 import type { DocumentMetadata } from '../types';
 import ToastContainer from '../shared/Toast';
 import { useAuth } from '../hooks/useAuth';
@@ -8,13 +7,15 @@ import { authEnabled } from '../lib/supabase';
 import { BRAND } from '../config/branding';
 import { useTheme } from '../hooks/useTheme';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
+import { useAppData } from '../hooks/useAppData';
+
 
 
 export default function Layout() {
   const { loading, user, signOut } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
-  const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
+  const { documents } = useAppData();
   const [pageKey, setPageKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -24,40 +25,14 @@ export default function Layout() {
 
 
 
-  const fetchDocs = useCallback(async () => {
-    try {
-      setDocuments(await listDocuments());
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
   /* ── Scroll main to top + close mobile sidebar on route change ── */
   useEffect(() => {
-    if (!authEnabled || user) {
-      void fetchDocs();
-    } else if (!loading) {
-      setDocuments([]);
-    }
-
     setPageKey((k) => k + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
     setSidebarOpen(false);
     setUserMenuOpen(false);
-  }, [fetchDocs, loading, location.pathname, user?.id]);
+  }, [location.pathname]);
 
-  /* ── Listen for document changes from page actions ── */
-  useEffect(() => {
-    const handleDocsChanged = () => {
-      if (!authEnabled || user) {
-        void fetchDocs();
-      }
-    };
-    window.addEventListener('documents-changed', handleDocsChanged);
-    return () => {
-      window.removeEventListener('documents-changed', handleDocsChanged);
-    };
-  }, [fetchDocs, user]);
 
   /* ── Close user menu on outside click ── */
   useEffect(() => {

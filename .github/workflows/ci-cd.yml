@@ -44,6 +44,9 @@ jobs:
       - name: Ruff check
         run: python -m ruff check app tests --output-format=github
 
+      - name: Ruff format check
+        run: python -m ruff format --check app tests
+
   backend-test:
     name: Backend / Tests
     runs-on: ubuntu-latest

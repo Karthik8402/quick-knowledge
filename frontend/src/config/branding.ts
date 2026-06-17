@@ -19,9 +19,10 @@ export const MODEL_CONFIG: Record<string, { displayName: string; models: { id: s
   google: {
     displayName: 'Google (Gemini)',
     models: [
-      { id: 'gemini-3.1-flash', name: 'Gemini 3.1 Flash' },
+      { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' },
       { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
-      { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live (Preview)' },
+      { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live' },
     ],
   },
   openai: {
@@ -43,7 +44,7 @@ export const MODEL_CONFIG: Record<string, { displayName: string; models: { id: s
     models: [
       { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B' },
       { id: 'llama-3.1-70b-versatile', name: 'LLaMA 3.1 70B' },
-    ],
+    ]
   },
 };
 

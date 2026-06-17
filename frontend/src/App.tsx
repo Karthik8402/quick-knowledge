@@ -31,6 +31,8 @@ import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ThemeProvider } from './hooks/useTheme';
 
+import { AppDataProvider } from './hooks/useAppData';
+
 // NOTE: This must never be asynchronous. If authEnabled is ever made async (e.g. fetched from /system/config),
 // this top-level const pattern will silently fallback to initial values and bypass ProtectedRoute.
 const AUTH_ENABLED = authEnabled;
@@ -43,27 +45,30 @@ function DashboardRoutes() {
   }
 
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="chat" element={<ChatPage />} />
-        <Route path="documents" element={<DocumentsPage />} />
-        <Route path="chunks" element={<ChunksPage />} />
-        <Route path="status" element={<StatusPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="analytics" element={<AnalyticsPage />} />
-        <Route path="models" element={<ModelsPage />} />
-        <Route path="sessions" element={<SessionsPage />} />
-        <Route path="activity" element={<ActivityPage />} />
-        <Route path="notifications" element={<NotificationsPage />} />
-        <Route path="help" element={<HelpPage />} />
-        <Route path="about" element={<AboutPage />} />
-      </Route>
-    </Routes>
+    <AppDataProvider>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="chat" element={<ChatPage />} />
+          <Route path="documents" element={<DocumentsPage />} />
+          <Route path="chunks" element={<ChunksPage />} />
+          <Route path="status" element={<StatusPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="models" element={<ModelsPage />} />
+          <Route path="sessions" element={<SessionsPage />} />
+          <Route path="activity" element={<ActivityPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="help" element={<HelpPage />} />
+          <Route path="about" element={<AboutPage />} />
+        </Route>
+      </Routes>
+    </AppDataProvider>
   );
 }
+
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();

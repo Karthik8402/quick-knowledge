@@ -42,14 +42,34 @@ def chat(
             status_code=429, detail="AI request limit exceeded. Try again after reset."
         )
 
-    return ChatService.build_chat_response(
+    history = body.history
+    if body.session_id:
+        from app.services.chat_history_service import ChatHistoryService
+
+        history = ChatHistoryService.load_history(user.user_id, body.session_id)
+
+    response = ChatService.build_chat_response(
         body.question,
         vector_store,
         reg,
         user.user_id,
         body.document_ids,
-        history=body.history,
+        history=history,
     )
+
+    if body.session_id:
+        from app.services.chat_history_service import ChatHistoryService
+
+        ChatHistoryService.save_turns(
+            user.user_id,
+            body.session_id,
+            [
+                {"role": "user", "content": body.question},
+                {"role": "assistant", "content": response.answer},
+            ],
+        )
+
+    return response
 
 
 @router.post("/chat/stream")
@@ -79,6 +99,12 @@ async def chat_stream(
             status_code=429, detail="AI request limit exceeded. Try again after reset."
         )
 
+    history = body.history
+    if body.session_id:
+        from app.services.chat_history_service import ChatHistoryService
+
+        history = ChatHistoryService.load_history(user.user_id, body.session_id)
+
     return EventSourceResponse(
         ChatService.chat_stream_generator(
             body.question,
@@ -86,6 +112,7 @@ async def chat_stream(
             reg,
             user.user_id,
             body.document_ids,
-            history=body.history,
+            history=history,
+            session_id=body.session_id,
         )
     )

@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
-import { getNotifications, type NotificationItem } from '../api';
+import { useState } from 'react';
+import { useAppData } from '../hooks/useAppData';
+import type { NotificationItem } from '../types';
 
 type FilterTab = 'all' | 'critical' | 'warning' | 'info';
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const { notifications: notificationsData, loading } = useAppData();
+  const notifications: NotificationItem[] = notificationsData?.notifications || [];
   const [readIds, setReadIds] = useState<string[]>([]);
   const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
     try {
@@ -15,19 +17,6 @@ export default function NotificationsPage() {
     }
   });
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getNotifications()
-      .then(data => {
-        setNotifications(data.notifications);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
 
   const handleDismiss = (id: string) => {
     const target = notifications.find(n => n.id === id);

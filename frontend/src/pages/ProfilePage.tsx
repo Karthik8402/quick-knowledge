@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { showToast } from '../shared/Toast';
-import { useUsageStore } from '../services/usage';
-import { listDocuments } from '../api';
-import type { DocumentMetadata } from '../types';
+import { useAppData } from '../hooks/useAppData';
 
 export default function ProfilePage() {
   const { user, updateUserPassword } = useAuth();
@@ -23,13 +21,7 @@ export default function ProfilePage() {
     .map((part: string) => part[0]?.toUpperCase())
     .join('') || 'U';
 
-  const { data: usageData, fetchUsageIfStale } = useUsageStore();
-  const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
-
-  useEffect(() => {
-    fetchUsageIfStale();
-    listDocuments().then(setDocuments).catch(() => setDocuments([]));
-  }, [fetchUsageIfStale]);
+  const { usage: usageData, documents } = useAppData();
 
   const totalChunks = documents.reduce((acc, doc) => acc + doc.chunks, 0);
 

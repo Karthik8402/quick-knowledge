@@ -15,36 +15,56 @@ class TestHealthEndpoint:
         resp = test_client.get("/health")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] in ("healthy", "degraded")
+        assert data["status"] in ("ok", "degraded")
 
     def test_health_head_returns_200(self, test_client):
         resp = test_client.head("/health")
         assert resp.status_code == 200
 
-    def test_health_contains_version(self, test_client):
-        resp = test_client.get("/health")
+    def test_health_details_contains_version(self, test_client):
+        resp = test_client.get("/health/details")
+        assert resp.status_code == 200
         data = resp.json()
+        assert data["status"] in ("healthy", "degraded")
         assert "version" in data
         assert data["version"] == "3.0.0"
         assert "git_commit" in data
         assert data["git_commit"] == "local"
 
-    def test_health_contains_uptime(self, test_client):
-        resp = test_client.get("/health")
+    def test_health_details_contains_uptime(self, test_client):
+        resp = test_client.get("/health/details")
+        assert resp.status_code == 200
         data = resp.json()
         assert "uptime_seconds" in data
         assert isinstance(data["uptime_seconds"], int)
         assert data["uptime_seconds"] >= 0
 
-    def test_health_contains_python_version(self, test_client):
-        resp = test_client.get("/health")
+    def test_health_details_contains_python_version(self, test_client):
+        resp = test_client.get("/health/details")
+        assert resp.status_code == 200
         data = resp.json()
         assert "python_version" in data
 
-    def test_health_contains_timestamp(self, test_client):
-        resp = test_client.get("/health")
+    def test_health_details_contains_timestamp(self, test_client):
+        resp = test_client.get("/health/details")
+        assert resp.status_code == 200
         data = resp.json()
         assert "timestamp" in data
+
+    def test_health_details_as_non_admin_fails(self, test_client):
+        from app.core.auth import UserContext, get_current_user
+        from app.main import app
+
+        def mock_regular_user():
+            return UserContext(user_id="user-456", email="user@example.com", role="authenticated")
+
+        app.dependency_overrides[get_current_user] = mock_regular_user
+        try:
+            resp = test_client.get("/health/details")
+            assert resp.status_code == 403
+            assert "Admin privileges required" in resp.json()["detail"]
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
