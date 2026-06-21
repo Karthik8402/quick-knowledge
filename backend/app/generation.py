@@ -151,7 +151,15 @@ def get_chat_model():
 
 
 def build_context(retrieved_docs: list[tuple[Document, float]]) -> str:
-    """Build a structured context block with document name, page, and content."""
+    """Build a structured context block with document name, page, and content.
+
+    Chunks are run through :class:`ContextSanitizer` to remove indirect
+    prompt-injection attempts before they reach the LLM.
+    """
+    from .sanitizer import ContextSanitizer
+
+    ContextSanitizer.sanitise_docs(retrieved_docs)
+
     chunks = []
     for index, (doc, _score) in enumerate(retrieved_docs, start=1):
         meta = doc.metadata or {}

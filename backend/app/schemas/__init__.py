@@ -11,6 +11,14 @@ class Citation(BaseModel):
     file_name: str = Field(max_length=255)
     page: int | None = None
     snippet: str = Field(max_length=500)
+    confidence: str = Field(default="Medium", max_length=10)
+
+    @field_validator("confidence")
+    @classmethod
+    def validate_confidence(cls, v: str) -> str:
+        if v not in ("Low", "Medium", "High"):
+            raise ValueError("confidence must be Low, Medium, or High")
+        return v
 
 
 class RetrievedChunk(BaseModel):

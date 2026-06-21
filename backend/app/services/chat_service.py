@@ -6,7 +6,7 @@ from typing import Any
 
 from langchain_core.documents import Document
 
-from app.citations import validate_citation_indices
+from app.citations import score_to_confidence, validate_citation_indices
 from app.config import get_settings
 from app.generation import FALLBACK_ANSWER, answer_with_citations, stream_answer_with_citations
 from app.schemas import ChatResponse, Citation, RetrievedChunk
@@ -138,7 +138,7 @@ class ChatService:
 
         # Build citations from relevant docs that were actually used
         safe_indices = state.citation_indices
-        for idx, (doc, _score) in enumerate(state.relevant_docs, start=1):
+        for idx, (doc, score) in enumerate(state.relevant_docs, start=1):
             if idx in safe_indices:
                 meta = doc.metadata or {}
                 page_value = meta.get("page")
@@ -149,6 +149,7 @@ class ChatService:
                         file_name=meta.get("file_name", "unknown"),
                         page=page_number,
                         snippet=doc.page_content[:220],
+                        confidence=score_to_confidence(score),
                     )
                 )
 
@@ -164,6 +165,7 @@ class ChatService:
                     file_name=meta.get("file_name", "unknown"),
                     page=page_number,
                     snippet=doc.page_content[:220],
+                    confidence=score_to_confidence(score),
                 )
             )
 
@@ -218,7 +220,7 @@ class ChatService:
             return
 
         citations_data = []
-        for _idx, (doc, _score) in enumerate(state.relevant_docs, start=1):
+        for _idx, (doc, score) in enumerate(state.relevant_docs, start=1):
             meta = doc.metadata or {}
             page_value = meta.get("page")
             page_number = int(page_value) + 1 if isinstance(page_value, int) else None
@@ -228,6 +230,7 @@ class ChatService:
                     "file_name": meta.get("file_name", "unknown"),
                     "page": page_number,
                     "snippet": doc.page_content[:220],
+                    "confidence": score_to_confidence(score),
                 }
             )
 

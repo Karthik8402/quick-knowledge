@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,27 @@ from .exceptions import EmptyDocumentError, FileTooLargeError, UnsupportedFileTy
 from .storage import content_hash_from_bytes, create_document_id
 
 logger = logging.getLogger(__name__)
+
+# ── PII redaction patterns ─────────────────────────────────────────────
+_PII_PATTERNS: list[re.Pattern] = [
+    # Email addresses
+    re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b"),
+    # Phone numbers: +1 (555) 123-4567, 555-123-4567, 555.123.4567, etc.
+    re.compile(
+        r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"
+    ),
+    # Credit card numbers: 13-19 digit sequences, optionally with spaces/dashes
+    # grouped in common patterns (4-6-4-4, 4-4-4-4, 4-4-4, etc.)
+    re.compile(r"\b(?:\d{4}[-\s]?){3,4}\d{4}\b"),
+]
+
+
+def _redact_pii(text: str) -> str:
+    """Replace detected PII with ``[REDACTED]`` in the given text."""
+    result = text
+    for pattern in _PII_PATTERNS:
+        result = pattern.sub("[REDACTED]", result)
+    return result
 
 # Allowed file extensions and their MIME types
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx"}
@@ -164,6 +186,18 @@ def ingest_files(
             base_docs = _load_documents(destination)
             if not base_docs:
                 raise EmptyDocumentError(upload.filename)
+
+            # Redact PII from document text before chunking
+            redacted_count = 0
+            for doc in base_docs:
+                original = doc.page_content or ""
+                redacted = _redact_pii(original)
+                if redacted != original:
+                    redacted_count += 1
+                doc.page_content = redacted
+
+            if redacted_count:
+                logger.info("PII redacted in %d/%d pages for %s", redacted_count, len(base_docs), upload.filename)
 
             chunks = splitter.split_documents(base_docs)
             chunks = _enrich_metadata(chunks, document_id, upload.filename, owner_id)

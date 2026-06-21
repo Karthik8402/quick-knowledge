@@ -1,7 +1,9 @@
 """Chat route: question answering with RAG citations + SSE streaming — secured."""
 
+import asyncio
 import json
 import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,6 +20,58 @@ from app.services.usage_service import UsageService
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 limiter = Limiter(key_func=get_remote_address)
+
+# ── SSE streaming guardrails ───────────────────────────────────────────
+STREAM_TIMEOUT_SECONDS = 120
+HEARTBEAT_INTERVAL_SECONDS = 15
+
+
+async def _stream_with_heartbeat(
+    sync_gen,
+    *,
+    timeout: float = STREAM_TIMEOUT_SECONDS,
+    heartbeat_interval: float = HEARTBEAT_INTERVAL_SECONDS,
+):
+    """Wrap a synchronous SSE generator with heartbeat events and a hard timeout.
+
+    Yields heartbeat events every *heartbeat_interval* seconds so the client
+    stays connected.  Raises ``asyncio.TimeoutError`` if streaming exceeds
+    *timeout* seconds — this triggers an ``error`` event and clean shutdown.
+    """
+    deadline = time.monotonic() + timeout
+    last_heartbeat = time.monotonic()
+    stream_done = False
+
+    async def _drain_sync():
+        nonlocal stream_done
+        for event in sync_gen:
+            yield event
+        stream_done = True
+
+    async_gen = _drain_sync()
+    ait = async_gen.__aiter__()
+
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            yield {"event": "error", "data": "Stream timeout exceeded"}
+            return
+
+        wait_time = min(remaining, heartbeat_interval)
+
+        try:
+            event = await asyncio.wait_for(ait.__anext__(), timeout=wait_time)
+            yield event
+            last_heartbeat = time.monotonic()
+        except StopAsyncIteration:
+            return
+        except asyncio.TimeoutError:
+            if stream_done:
+                return
+            now = time.monotonic()
+            if now - last_heartbeat >= heartbeat_interval:
+                yield {"event": "heartbeat", "data": ""}
+                last_heartbeat = now
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -106,13 +160,15 @@ async def chat_stream(
         history = ChatHistoryService.load_history(user.user_id, body.session_id)
 
     return EventSourceResponse(
-        ChatService.chat_stream_generator(
-            body.question,
-            vector_store,
-            reg,
-            user.user_id,
-            body.document_ids,
-            history=history,
-            session_id=body.session_id,
+        _stream_with_heartbeat(
+            ChatService.chat_stream_generator(
+                body.question,
+                vector_store,
+                reg,
+                user.user_id,
+                body.document_ids,
+                history=history,
+                session_id=body.session_id,
+            )
         )
     )

@@ -114,7 +114,11 @@ def grade_node(state: RAGState) -> RAGState:
 # Node: Generate
 # ---------------------------------------------------------------------------
 def generate_node(state: RAGState) -> RAGState:
-    """Generate a grounded answer with citations from relevant chunks."""
+    """Generate a grounded answer with citations from relevant chunks.
+
+    Context is automatically sanitised by :class:`ContextSanitizer`
+    inside :func:`app.generation.build_context` before reaching the LLM.
+    """
     if state.fallback or not state.relevant_docs:
         state.answer = FALLBACK_ANSWER
         state.citation_indices = []
