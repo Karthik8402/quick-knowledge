@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import logging
-import re
 from pathlib import Path
+import re
 from typing import Any
 
 from fastapi import UploadFile
@@ -25,12 +25,25 @@ _PII_PATTERNS: list[re.Pattern] = [
     # Email addresses
     re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b"),
     # Phone numbers: +1 (555) 123-4567, 555-123-4567, 555.123.4567, etc.
-    re.compile(
-        r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"
-    ),
+    re.compile(r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
     # Credit card numbers: 13-19 digit sequences, optionally with spaces/dashes
     # grouped in common patterns (4-6-4-4, 4-4-4-4, 4-4-4, etc.)
     re.compile(r"\b(?:\d{4}[-\s]?){3,4}\d{4}\b"),
+    # US Social Security Numbers: XXX-XX-XXXX
+    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+    # IPv4 addresses (avoid matching version numbers like 1.2.3)
+    re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
+    # Date of birth patterns: DOB: 01/15/1990, Date of Birth: 15-01-1990
+    re.compile(
+        r"\b(?:DOB|Date\s+of\s+Birth|Born)\s*:?\s*\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b",
+        re.IGNORECASE,
+    ),
+    # API keys / secret keys (AWS AKIA, OpenAI sk-, Stripe sk_live/pk_live)
+    re.compile(r"\b(?:AKIA|sk-|sk_live_|pk_live_|sk_test_|pk_test_)[A-Za-z0-9]{10,}\b"),
+    # Passport numbers: common 6-9 alphanumeric format with "passport" keyword nearby
+    re.compile(r"(?i)\bpassport\s*(?:no|number|#)?\s*:?\s*[A-Z0-9]{6,9}\b"),
+    # IBAN: 2 letter country code + 2 check digits + up to 30 alphanumeric
+    re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{4,30}\b"),
 ]
 
 
@@ -40,6 +53,7 @@ def _redact_pii(text: str) -> str:
     for pattern in _PII_PATTERNS:
         result = pattern.sub("[REDACTED]", result)
     return result
+
 
 # Allowed file extensions and their MIME types
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx"}
@@ -197,7 +211,12 @@ def ingest_files(
                 doc.page_content = redacted
 
             if redacted_count:
-                logger.info("PII redacted in %d/%d pages for %s", redacted_count, len(base_docs), upload.filename)
+                logger.info(
+                    "PII redacted in %d/%d pages for %s",
+                    redacted_count,
+                    len(base_docs),
+                    upload.filename,
+                )
 
             chunks = splitter.split_documents(base_docs)
             chunks = _enrich_metadata(chunks, document_id, upload.filename, owner_id)

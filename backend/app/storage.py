@@ -119,14 +119,34 @@ class LocalDocumentRegistry:
 # Supabase Postgres-backed registry (production mode)
 # ---------------------------------------------------------------------------
 class SupabaseDocumentRegistry:
-    """Document registry backed by Supabase Postgres for production use."""
+    """Document registry backed by Supabase Postgres for production use.
 
-    def __init__(self) -> None:
-        from .core.supabase import get_supabase_client
+    By default uses the SERVICE KEY client (for backward compat and system ops).
+    Call ``with_user_jwt(jwt)`` to get a copy that uses a user-scoped client
+    which respects Row-Level Security.
+    """
 
-        self._client = get_supabase_client()
+    def __init__(self, user_jwt: str | None = None) -> None:
+        self._user_jwt = user_jwt
+        if user_jwt:
+            from .core.supabase import get_supabase_user_client
+
+            self._client = get_supabase_user_client(user_jwt)
+            logger.info("Supabase document registry initialized (user-scoped)")
+        else:
+            from .core.supabase import get_supabase_client
+
+            self._client = get_supabase_client()
+            logger.info("Supabase document registry initialized (service key)")
         self._table = "documents"
-        logger.info("Supabase document registry initialized")
+
+    def with_user_jwt(self, jwt: str) -> SupabaseDocumentRegistry:
+        """Return a new registry instance scoped to the user's JWT.
+
+        The returned instance uses ``SUPABASE_ANON_KEY`` + the user's JWT
+        so all queries go through Row-Level Security automatically.
+        """
+        return SupabaseDocumentRegistry(user_jwt=jwt)
 
     def list_documents(self, owner_id: str | None = None) -> list[dict]:
         try:

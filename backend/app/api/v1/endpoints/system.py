@@ -28,27 +28,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["system"])
 
 # ── Sensitive config keys that MUST never be returned to any client ─────
-SENSITIVE_CONFIG_KEYS: frozenset[str] = frozenset({
-    "supabase_service_key",
-    "supabase_anon_key",
-    "supabase_jwt_secret",
-    "supabase_url",
-    "database_url",
-    "google_api_key",
-    "openai_api_key",
-    "groq_api_key",
-    "redis_url",
-    "chroma_persist_dir",
-    "upload_dir",
-    "metadata_db_path",
-    "sqlite_db_path",
-    "admin_emails",
-})
+SENSITIVE_CONFIG_KEYS: frozenset[str] = frozenset(
+    {
+        "supabase_service_key",
+        "supabase_anon_key",
+        "supabase_jwt_secret",
+        "supabase_url",
+        "database_url",
+        "google_api_key",
+        "openai_api_key",
+        "groq_api_key",
+        "redis_url",
+        "chroma_persist_dir",
+        "upload_dir",
+        "metadata_db_path",
+        "sqlite_db_path",
+        "admin_emails",
+    }
+)
 
 
 def _filter_sensitive_config(config: dict[str, Any]) -> dict[str, Any]:
     """Remove any keys that match sensitive configuration keys."""
     return {k: v for k, v in config.items() if k not in SENSITIVE_CONFIG_KEYS}
+
 
 _start_time = time.time()
 
@@ -72,6 +75,9 @@ def health(
         try:
             from app.core.supabase import get_supabase_client
 
+            # Service key is appropriate here: this is a system-level health
+            # check, not a user-facing query.  It intentionally bypasses RLS
+            # to verify raw database connectivity.
             client = get_supabase_client()
             client.table("documents").select("id").limit(1).execute()
             checks["supabase_connection"] = True
@@ -193,15 +199,17 @@ def get_system_config(user: UserContext | None = Depends(get_optional_user)):
             "configured": init_err is None,
         }
 
-    return _filter_sensitive_config({
-        "configured": init_err is None,
-        "init_error": str(init_err) if init_err else None,
-        "llm_provider": settings.llm_provider,
-        "llm_model": settings.llm_model,
-        "embedding_provider": settings.embedding_provider,
-        "embedding_model": settings.embedding_model,
-        "vector_store": settings.vector_store,
-    })
+    return _filter_sensitive_config(
+        {
+            "configured": init_err is None,
+            "init_error": str(init_err) if init_err else None,
+            "llm_provider": settings.llm_provider,
+            "llm_model": settings.llm_model,
+            "embedding_provider": settings.embedding_provider,
+            "embedding_model": settings.embedding_model,
+            "vector_store": settings.vector_store,
+        }
+    )
 
 
 @router.get("/usage")

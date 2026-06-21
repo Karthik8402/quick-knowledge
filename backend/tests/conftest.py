@@ -132,11 +132,13 @@ def mock_vector_store() -> MagicMock:
 @pytest.fixture()
 def test_client(tmp_registry, mock_vector_store) -> TestClient:
     """TestClient wired with mocked vector store and temporary registry."""
+    from app.core.sse_limiter import sse_limiter
     from app.dependencies import get_registry, set_embeddings, set_vector_store
     from app.main import app
 
     set_vector_store(mock_vector_store)
     set_embeddings(MagicMock())
+    sse_limiter.reset()  # Clear SSE connection slots between tests
 
     def override_registry():
         return tmp_registry
@@ -149,6 +151,7 @@ def test_client(tmp_registry, mock_vector_store) -> TestClient:
     app.dependency_overrides.clear()
     set_vector_store(None)
     set_embeddings(None)
+    sse_limiter.reset()
 
 
 # ---------------------------------------------------------------------------
@@ -161,11 +164,13 @@ async def async_test_client(tmp_registry, mock_vector_store):
 
     from httpx import ASGITransport, AsyncClient
 
+    from app.core.sse_limiter import sse_limiter
     from app.dependencies import get_registry, set_embeddings, set_vector_store
     from app.main import app
 
     set_vector_store(mock_vector_store)
     set_embeddings(MagicMock())
+    sse_limiter.reset()  # Clear SSE connection slots between tests
 
     def override_registry():
         return tmp_registry
@@ -179,6 +184,7 @@ async def async_test_client(tmp_registry, mock_vector_store):
     app.dependency_overrides.clear()
     set_vector_store(None)
     set_embeddings(None)
+    sse_limiter.reset()
 
 
 # ---------------------------------------------------------------------------

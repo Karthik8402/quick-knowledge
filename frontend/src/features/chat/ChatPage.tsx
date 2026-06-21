@@ -9,6 +9,34 @@ import { useAuth } from '../../hooks/useAuth';
 import DOMPurify from 'dompurify';
 
 /* ──────────────────────────────────────────────
+   Security: URL sanitization & DOMPurify config
+   ────────────────────────────────────────────── */
+const SAFE_URL_PATTERN = /^(?:https?:\/\/|#|mailto:)/i;
+
+/** Strip dangerous URI schemes (javascript:, data:, vbscript:, etc.) */
+function sanitizeUrl(url: string): string {
+  const trimmed = url.trim();
+  if (SAFE_URL_PATTERN.test(trimmed)) return trimmed;
+  return '#'; // neutralise anything that isn't http(s), anchor, or mailto
+}
+
+// Configure DOMPurify to block dangerous URI schemes globally
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.hasAttribute('href')) {
+    const href = node.getAttribute('href') || '';
+    if (!SAFE_URL_PATTERN.test(href.trim())) {
+      node.setAttribute('href', '#');
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+  }
+  // Force target="_blank" + rel on all outbound links
+  if (node.tagName === 'A' && node.hasAttribute('href')) {
+    node.setAttribute('target', '_blank');
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+});
+
+/* ──────────────────────────────────────────────
    Types
    ────────────────────────────────────────────── */
 type Message = { role: 'user' | 'assistant'; text: string; data?: ChatResponse; streaming?: boolean; };
@@ -67,6 +95,8 @@ function generateId() {
    - bullet lists, numbered lists, and line breaks
    ────────────────────────────────────────────── */
 function renderMarkdown(text: string) {
+  // Security: sanitize LLM output to strip any embedded HTML/script payloads
+  text = DOMPurify.sanitize(text, { ALLOWED_TAGS: [], KEEP_CONTENT: true });
   // Split by code blocks first
   const parts = text.split(/(```[\s\S]*?```)/g);
 
@@ -136,10 +166,10 @@ function renderMarkdown(text: string) {
   });
 }
 
-/** Inline formatting: **bold**, *italic*, `code` */
+/** Inline formatting: **bold**, *italic*, `code`, [link](url) */
 function renderInline(text: string): React.ReactNode {
-  // Split by inline code, bold, italic
-  const tokens = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+  // Split by inline code, bold, italic, and markdown links
+  const tokens = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g);
   return tokens.map((t, i) => {
     if (t.startsWith('**') && t.endsWith('**')) {
       return <strong key={i} className="font-bold text-on-surface">{t.slice(2, -2)}</strong>;
@@ -149,6 +179,18 @@ function renderInline(text: string): React.ReactNode {
     }
     if (t.startsWith('`') && t.endsWith('`')) {
       return <code key={i} className="bg-surface-container-highest/80 text-primary px-1.5 py-0.5 rounded text-[11px] font-mono">{t.slice(1, -1)}</code>;
+    }
+    // Markdown link: [text](url) — sanitize URL to block javascript:/data:/vbscript:
+    const linkMatch = t.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (linkMatch) {
+      const [, linkText, rawUrl] = linkMatch;
+      const safeUrl = sanitizeUrl(rawUrl);
+      return (
+        <a key={i} href={safeUrl} target="_blank" rel="noopener noreferrer"
+           className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors">
+          {linkText}
+        </a>
+      );
     }
     return <span key={i}>{t}</span>;
   });

@@ -1,4 +1,15 @@
-"""Supabase client singleton and storage helpers."""
+"""Supabase client singleton and storage helpers.
+
+Two client modes:
+  - **Service client** (``get_supabase_client``): Uses ``SUPABASE_SERVICE_KEY``.
+    Bypasses all RLS. Reserved for system-level operations (health checks,
+    global cleanup, vector status).  NEVER use for user-facing data queries.
+
+  - **User-scoped client** (``get_supabase_user_client``): Uses
+    ``SUPABASE_ANON_KEY`` with the user's JWT set as the auth header.
+    Respects RLS — the database enforces data isolation automatically.
+    Use this for all user-facing document/storage operations.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +23,12 @@ logger = logging.getLogger(__name__)
 
 @lru_cache
 def get_supabase_client():
-    """Return an authenticated Supabase admin client (server-side)."""
+    """Return an authenticated Supabase admin client (server-side).
+
+    ⚠️  This client uses the SERVICE KEY and bypasses all Row-Level Security.
+    Use ONLY for system-level operations (health checks, migrations, global
+    analytics).  For user-facing queries, use ``get_supabase_user_client()``.
+    """
     settings = get_settings()
     if not settings.supabase_url or not settings.supabase_service_key:
         raise ValueError(
@@ -22,7 +38,34 @@ def get_supabase_client():
     from supabase import create_client
 
     client = create_client(settings.supabase_url, settings.supabase_service_key)
-    logger.info("Supabase client initialized for %s", settings.supabase_url)
+    logger.info("Supabase SERVICE client initialized for %s", settings.supabase_url)
+    return client
+
+
+def get_supabase_user_client(user_jwt: str):
+    """Return a Supabase client scoped to the given user's JWT.
+
+    Uses the ANON KEY (not the service key) so all queries go through
+    Row-Level Security.  The user's JWT is set as the Authorization header
+    so Supabase resolves ``auth.uid()`` to the correct user.
+
+    These clients are NOT cached — each request gets a fresh client scoped
+    to the caller's session.  This is safe because Supabase client creation
+    is lightweight (no persistent connection pool).
+    """
+    settings = get_settings()
+    if not settings.supabase_url or not settings.supabase_anon_key:
+        raise ValueError("SUPABASE_URL and SUPABASE_ANON_KEY are required for user-scoped client")
+
+    from supabase import ClientOptions, create_client
+
+    client = create_client(
+        settings.supabase_url,
+        settings.supabase_anon_key,
+        options=ClientOptions(
+            headers={"Authorization": f"Bearer {user_jwt}"},
+        ),
+    )
     return client
 
 

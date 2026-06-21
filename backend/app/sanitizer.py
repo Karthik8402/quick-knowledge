@@ -99,8 +99,7 @@ class ContextSanitizer:
             if scan["flagged"]:
                 flagged += 1
                 log.warning(
-                    "Indirect prompt injection detected in chunk "
-                    "(relevance=%.3f): %d match(es)",
+                    "Indirect prompt injection detected in chunk (relevance=%.3f): %d match(es)",
                     score,
                     len(scan["matches"]),
                 )

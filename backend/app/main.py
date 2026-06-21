@@ -203,13 +203,15 @@ async def security_headers_middleware(request: Request, call_next) -> Response:
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "img-src 'self' data: https:; "
-        "style-src 'self' 'unsafe-inline' https:; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "script-src 'self'; "
         "connect-src 'self' https: http:; "
-        "font-src 'self' data: https:; "
+        "font-src 'self' data: https://fonts.gstatic.com; "
+        "object-src 'none'; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
-        "form-action 'self'"
+        "form-action 'self'; "
+        "upgrade-insecure-requests"
     )
     return response
 

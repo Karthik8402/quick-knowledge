@@ -670,12 +670,5 @@ body {
   word-wrap: normal;
   direction: ltr;
   -webkit-font-smoothing: antialiased;
-  /* Hide text until font is ready */
-  visibility: hidden;
-}
-
-/* Once font is loaded, show icons */
-.fonts-loaded .material-symbols-outlined {
-  visibility: visible;
 }
 

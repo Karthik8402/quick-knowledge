@@ -79,7 +79,8 @@ class Settings(BaseSettings):
     # ── Limits ──
     max_upload_size_mb: int = 25
     rate_limit: str = "10/minute"
-    daily_usage_limit: int = 50
+    daily_usage_limit: int = 10
+    max_sse_connections_per_ip: int = 3  # Per-IP concurrent SSE stream cap
 
     # ── CORS ──
     cors_origins: str = (

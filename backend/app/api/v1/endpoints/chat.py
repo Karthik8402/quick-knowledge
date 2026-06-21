@@ -12,6 +12,7 @@ from slowapi.util import get_remote_address
 from sse_starlette.sse import EventSourceResponse
 
 from app.core.auth import UserContext, get_current_user
+from app.core.sse_limiter import sse_limiter
 from app.dependencies import get_registry, get_vector_store_optional
 from app.schemas import ChatRequest, ChatResponse
 from app.services.chat_service import ChatService
@@ -27,12 +28,14 @@ HEARTBEAT_INTERVAL_SECONDS = 15
 
 
 async def _stream_with_heartbeat(
-    sync_gen,
+    gen,
     *,
     timeout: float = STREAM_TIMEOUT_SECONDS,
     heartbeat_interval: float = HEARTBEAT_INTERVAL_SECONDS,
 ):
-    """Wrap a synchronous SSE generator with heartbeat events and a hard timeout.
+    """Wrap an SSE generator with heartbeat events and a hard timeout.
+
+    Accepts both synchronous and asynchronous generators.
 
     Yields heartbeat events every *heartbeat_interval* seconds so the client
     stays connected.  Raises ``asyncio.TimeoutError`` if streaming exceeds
@@ -42,13 +45,18 @@ async def _stream_with_heartbeat(
     last_heartbeat = time.monotonic()
     stream_done = False
 
-    async def _drain_sync():
+    async def _drain():
         nonlocal stream_done
-        for event in sync_gen:
-            yield event
+        # Support both sync and async generators
+        if hasattr(gen, "__aiter__"):
+            async for event in gen:
+                yield event
+        else:
+            for event in gen:
+                yield event
         stream_done = True
 
-    async_gen = _drain_sync()
+    async_gen = _drain()
     ait = async_gen.__aiter__()
 
     while True:
@@ -65,7 +73,7 @@ async def _stream_with_heartbeat(
             last_heartbeat = time.monotonic()
         except StopAsyncIteration:
             return
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if stream_done:
                 return
             now = time.monotonic()
@@ -135,8 +143,17 @@ async def chat_stream(
     reg=Depends(get_registry),
     user: UserContext = Depends(get_current_user),
 ):
+    # ── Per-IP SSE connection limiting (DoS guard) ──
+    client_ip = request.client.host if request.client else "unknown"
+    if not sse_limiter.try_acquire(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many concurrent streams. Please close other chat tabs and try again.",
+        )
+
     if ChatService.check_prompt_injection(body.question):
         logger.warning("Prompt injection attempt blocked (stream) from user=%s", user.user_id)
+        sse_limiter.release(client_ip)
 
         async def injection_gen():
             yield {
@@ -149,6 +166,7 @@ async def chat_stream(
         return EventSourceResponse(injection_gen())
 
     if not UsageService.increment_usage(user.user_id):
+        sse_limiter.release(client_ip)
         raise HTTPException(
             status_code=429, detail="AI request limit exceeded. Try again after reset."
         )
@@ -159,16 +177,22 @@ async def chat_stream(
 
         history = ChatHistoryService.load_history(user.user_id, body.session_id)
 
-    return EventSourceResponse(
-        _stream_with_heartbeat(
-            ChatService.chat_stream_generator(
-                body.question,
-                vector_store,
-                reg,
-                user.user_id,
-                body.document_ids,
-                history=history,
-                session_id=body.session_id,
-            )
-        )
-    )
+    async def _limited_stream():
+        """Wrap the SSE generator to ensure the limiter slot is released on disconnect."""
+        try:
+            async for event in _stream_with_heartbeat(
+                ChatService.chat_stream_generator(
+                    body.question,
+                    vector_store,
+                    reg,
+                    user.user_id,
+                    body.document_ids,
+                    history=history,
+                    session_id=body.session_id,
+                )
+            ):
+                yield event
+        finally:
+            sse_limiter.release(client_ip)
+
+    return EventSourceResponse(_limited_stream())
