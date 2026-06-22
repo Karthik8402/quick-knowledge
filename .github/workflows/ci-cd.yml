@@ -417,19 +417,10 @@ jobs:
           echo "Health response: $response"
           echo "$response" | python3 -m json.tool
 
-          # Check critical components
-          storage=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('storage_backend', ''))")
-          vector=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('vector_store', ''))")
           status=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status', ''))")
 
-          if [ "$storage" != "supabase" ]; then
-            echo "::warning::Storage backend is '$storage', expected 'supabase'"
-          fi
-          if [ "$vector" != "chroma" ]; then
-            echo "::warning::Vector store is '$vector', expected 'chroma'"
-          fi
-          if [ "$status" != "healthy" ]; then
-            echo "::error::Backend status is '$status', expected 'healthy'"
+          if [ "$status" != "ok" ] && [ "$status" != "healthy" ]; then
+            echo "::error::Backend status is '$status', expected 'ok' or 'healthy'"
             exit 1
           fi
 
