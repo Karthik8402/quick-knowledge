@@ -15,7 +15,8 @@ class TestHealthEndpoint:
         resp = test_client.get("/health")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] in ("ok", "degraded")
+        assert data["status"] == "ok"
+        assert "git_commit" in data
 
     def test_health_head_returns_200(self, test_client):
         resp = test_client.head("/health")

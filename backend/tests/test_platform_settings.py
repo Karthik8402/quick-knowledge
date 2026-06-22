@@ -27,7 +27,7 @@ class TestPlatformSettingsService:
         settings = get_settings()
         original_db_path = settings.sqlite_db_path
         settings.sqlite_db_path = str(db_path)
-
+        conn = None
         try:
             conn = PlatformSettingsService._get_sqlite_conn()
             cursor = conn.cursor()
@@ -37,8 +37,9 @@ class TestPlatformSettingsService:
             row = cursor.fetchone()
             assert row is not None
             assert row[0] == "platform_settings"
-            conn.close()
         finally:
+            if conn:
+                conn.close()
             settings.sqlite_db_path = original_db_path
 
     def test_save_and_load_settings_sqlite(self, tmp_path):

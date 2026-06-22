@@ -54,14 +54,18 @@ class ChatHistoryService:
         else:
             # Local SQLite database
             try:
-                with ChatHistoryService._get_sqlite_conn() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "SELECT role, content FROM chat_sessions WHERE user_id = ? AND session_id = ? ORDER BY id ASC",
-                        (user_id, session_id),
-                    )
-                    rows = cursor.fetchall()
-                    return [{"role": r[0], "content": r[1]} for r in rows]
+                conn = ChatHistoryService._get_sqlite_conn()
+                try:
+                    with conn:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "SELECT role, content FROM chat_sessions WHERE user_id = ? AND session_id = ? ORDER BY id ASC",
+                            (user_id, session_id),
+                        )
+                        rows = cursor.fetchall()
+                        return [{"role": r[0], "content": r[1]} for r in rows]
+                finally:
+                    conn.close()
             except Exception as e:
                 logger.warning("Failed to load chat history from SQLite: %s", e)
                 return []
@@ -97,21 +101,25 @@ class ChatHistoryService:
         else:
             # Local SQLite database
             try:
-                with ChatHistoryService._get_sqlite_conn() as conn:
-                    cursor = conn.cursor()
-                    for t in turns:
-                        metadata_str = json.dumps(t.get("metadata") or {})
-                        cursor.execute(
-                            "INSERT INTO chat_sessions (user_id, session_id, role, content, created_at, metadata) VALUES (?, ?, ?, ?, ?, ?)",
-                            (
-                                user_id,
-                                session_id,
-                                t["role"],
-                                t["content"],
-                                created_at_str,
-                                metadata_str,
-                            ),
-                        )
-                    conn.commit()
+                conn = ChatHistoryService._get_sqlite_conn()
+                try:
+                    with conn:
+                        cursor = conn.cursor()
+                        for t in turns:
+                            metadata_str = json.dumps(t.get("metadata") or {})
+                            cursor.execute(
+                                "INSERT INTO chat_sessions (user_id, session_id, role, content, created_at, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+                                (
+                                    user_id,
+                                    session_id,
+                                    t["role"],
+                                    t["content"],
+                                    created_at_str,
+                                    metadata_str,
+                                ),
+                            )
+                        conn.commit()
+                finally:
+                    conn.close()
             except Exception as e:
                 logger.warning("Failed to save chat history to SQLite: %s", e)

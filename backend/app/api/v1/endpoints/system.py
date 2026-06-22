@@ -58,47 +58,14 @@ _start_time = time.time()
 
 @router.get("/health", response_model=HealthResponse)
 @router.head("/health")
-def health(
-    vector_store: Any = Depends(get_vector_store_optional),
-    embeddings: Any = Depends(get_embeddings_instance),
-) -> dict:
-    """Public health check returning only {"status": "ok"/"degraded"}."""
-    settings = get_settings()
-
-    checks: dict[str, Any] = {
-        "vector_store": vector_store is not None,
-        "embeddings": embeddings is not None,
+def health() -> dict:
+    """Public health check returning only {"status": "ok"} and the git commit SHA."""
+    return {
+        "status": "ok",
+        "git_commit": os.environ.get("RENDER_GIT_COMMIT")
+        or os.environ.get("GIT_COMMIT")
+        or "local",
     }
-
-    # Check Supabase connectivity when using supabase backend
-    if settings.storage_backend == "supabase":
-        try:
-            from app.core.supabase import get_supabase_client
-
-            # Service key is appropriate here: this is a system-level health
-            # check, not a user-facing query.  It intentionally bypasses RLS
-            # to verify raw database connectivity.
-            client = get_supabase_client()
-            client.table("documents").select("id").limit(1).execute()
-            checks["supabase_connection"] = True
-        except Exception:
-            checks["supabase_connection"] = False
-
-    # Check disk space in local mode
-    if settings.storage_backend == "local":
-        try:
-            data_dir = Path(settings.upload_dir).parent
-            if data_dir.exists():
-                disk = shutil.disk_usage(str(data_dir))
-                disk_free_mb = disk.free / (1024 * 1024)
-                checks["disk_space_ok"] = disk_free_mb > 100
-            else:
-                checks["disk_space_ok"] = False
-        except Exception:
-            checks["disk_space_ok"] = False
-
-    overall = all(v for k, v in checks.items() if isinstance(v, bool))
-    return {"status": "ok" if overall else "degraded"}
 
 
 @router.get("/health/details")

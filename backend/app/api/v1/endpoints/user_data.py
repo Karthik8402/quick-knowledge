@@ -168,6 +168,7 @@ def get_supabase_db_conn():
 
 @router.get("/sessions")
 def get_sessions(
+    request: Request,
     user: UserContext = Depends(get_current_user),
     reg=Depends(get_registry),
 ) -> dict[str, Any]:
@@ -203,8 +204,8 @@ def get_sessions(
             "first_seen": first_seen,
             "document_count": len(docs),
             "created_at": datetime.now(UTC).isoformat(),
-            "device": "Windows — Chrome (Dev Mode)",
-            "ip": "127.0.0.1",
+            "device": parse_user_agent(request.headers.get("User-Agent")),
+            "ip": request.client.host if request.client else "127.0.0.1",
             "last_seen_at": last_activity or datetime.now(UTC).isoformat(),
         }
 
@@ -214,7 +215,31 @@ def get_sessions(
             "active_count": 1,
         }
 
-    conn = get_supabase_db_conn()
+    try:
+        conn = get_supabase_db_conn()
+    except Exception as e:
+        logger.warning(
+            "Database connection failed for sessions (user=%s): %s. Falling back to current session.",
+            user.user_id,
+            str(e),
+        )
+        ua = request.headers.get("User-Agent")
+        ip_addr = request.client.host if request.client else "127.0.0.1"
+        current_session = {
+            "session_id": user.session_id or "current",
+            "is_current": True,
+            "device": parse_user_agent(ua),
+            "ip": ip_addr or "Unknown",
+            "created_at": datetime.now(UTC).isoformat(),
+            "last_seen_at": datetime.now(UTC).isoformat(),
+        }
+        return {
+            "sessions": [current_session],
+            "total": 1,
+            "active_count": 1,
+            "note": "Detailed session history is temporarily unavailable due to database connectivity issues.",
+        }
+
     try:
         with conn.cursor() as cur:
             # Query active sessions from auth.sessions filtering by user_id to ensure ownership
@@ -255,7 +280,22 @@ def get_sessions(
             }
     except Exception as e:
         logger.warning("Failed to query sessions for user %s: %s", user.user_id, str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve sessions: {e}") from e
+        ua = request.headers.get("User-Agent")
+        ip_addr = request.client.host if request.client else "127.0.0.1"
+        current_session = {
+            "session_id": user.session_id or "current",
+            "is_current": True,
+            "device": parse_user_agent(ua),
+            "ip": ip_addr or "Unknown",
+            "created_at": datetime.now(UTC).isoformat(),
+            "last_seen_at": datetime.now(UTC).isoformat(),
+        }
+        return {
+            "sessions": [current_session],
+            "total": 1,
+            "active_count": 1,
+            "note": "Detailed session history is temporarily unavailable due to database connectivity issues.",
+        }
     finally:
         conn.close()
 
@@ -345,6 +385,7 @@ def _build_notifications(
     doc_count: int,
     store_initialized: bool,
     usage: dict[str, Any] | None,
+    docs: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Compute the live notification list from system state.
 
@@ -411,7 +452,29 @@ def _build_notifications(
                 }
             )
 
-    # 3. Onboarding — no documents yet
+    # 3. Document indexing success notifications (only if documents present)
+    if doc_count > 0 and docs:
+        # Sort by created_at descending (newest first) and take top 5
+        sorted_docs = sorted(docs, key=lambda d: d.get("created_at") or "", reverse=True)[:5]
+        for doc in sorted_docs:
+            doc_id = doc.get("document_id")
+            doc_name = doc.get("file_name", "document")
+            chunks = doc.get("chunks", 0)
+            doc_created = doc.get("created_at") or now
+            notifications.append(
+                {
+                    "id": f"doc-indexed-{doc_id}",
+                    "type": "info",
+                    "icon": "check_circle",
+                    "title": "Document Indexed Successfully",
+                    "body": f"The document '{doc_name}' has been processed and split into {chunks} chunks.",
+                    "timestamp": doc_created,
+                    "dismissible": True,
+                    "action": {"label": "Search Document", "href": "/"},
+                }
+            )
+
+    # 4. Onboarding — no documents yet
     if doc_count == 0:
         notifications.append(
             {
@@ -426,7 +489,7 @@ def _build_notifications(
             }
         )
 
-    # 4. Welcome notification for new users (only if no docs)
+    # 5. Welcome notification for new users (only if no docs)
     if doc_count == 0 and user.user_id != "anonymous":
         notifications.append(
             {
@@ -441,6 +504,35 @@ def _build_notifications(
                 "timestamp": now,
                 "dismissible": True,
                 "action": None,
+            }
+        )
+
+    # 6. Platform updates & general news (always show to keep inbox alive and informative)
+    notifications.append(
+        {
+            "id": "platform-update-v3",
+            "type": "info",
+            "icon": "campaign",
+            "title": "Platform Update: Version 3.0.0 Active",
+            "body": "Intelligent Knowledge Base v3.0.0 is live! Explore the newly upgraded premium Analytics suite and interactive charts.",
+            "timestamp": now,
+            "dismissible": True,
+            "action": {"label": "Explore Analytics", "href": "/analytics"},
+        }
+    )
+
+    # 7. Pro Tip: Tuning Search Relevance (if documents exist)
+    if doc_count > 0:
+        notifications.append(
+            {
+                "id": "tip-rag-tuning",
+                "type": "info",
+                "icon": "lightbulb",
+                "title": "Pro Tip: Tuning Search Relevance",
+                "body": "Optimize your results by fine-tuning Chunk Size, Overlap, and Top-K retrieval parameters in the Settings tab.",
+                "timestamp": now,
+                "dismissible": True,
+                "action": {"label": "Adjust Settings", "href": "/settings"},
             }
         )
 
@@ -470,7 +562,7 @@ def get_notifications(
     except Exception:
         logger.warning("Failed to fetch usage for notifications (user=%s)", user.user_id)
 
-    notifications = _build_notifications(user, doc_count, store_initialized, usage)
+    notifications = _build_notifications(user, doc_count, store_initialized, usage, docs)
 
     return {
         "notifications": notifications,

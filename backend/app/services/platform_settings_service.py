@@ -72,12 +72,16 @@ class PlatformSettingsService:
         else:
             # Local SQLite database
             try:
-                with cls._get_sqlite_conn() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT key, value FROM platform_settings")
-                    rows = cursor.fetchall()
-                    for key, val in rows:
-                        overrides[key] = cls._cast_value(key, val)
+                conn = cls._get_sqlite_conn()
+                try:
+                    with conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT key, value FROM platform_settings")
+                        rows = cursor.fetchall()
+                        for key, val in rows:
+                            overrides[key] = cls._cast_value(key, val)
+                finally:
+                    conn.close()
             except Exception as e:
                 logger.warning("Failed to load platform settings from SQLite: %s", e)
 
@@ -116,15 +120,19 @@ class PlatformSettingsService:
         else:
             # Local SQLite database
             try:
-                with cls._get_sqlite_conn() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "INSERT INTO platform_settings (key, value, updated_by, updated_at) "
-                        "VALUES (?, ?, ?, ?) "
-                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, "
-                        "updated_by=excluded.updated_by, updated_at=excluded.updated_at",
-                        (key, val_str, updated_by, updated_at),
-                    )
-                    conn.commit()
+                conn = cls._get_sqlite_conn()
+                try:
+                    with conn:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "INSERT INTO platform_settings (key, value, updated_by, updated_at) "
+                            "VALUES (?, ?, ?, ?) "
+                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, "
+                            "updated_by=excluded.updated_by, updated_at=excluded.updated_at",
+                            (key, val_str, updated_by, updated_at),
+                        )
+                        conn.commit()
+                finally:
+                    conn.close()
             except Exception as e:
                 logger.warning("Failed to save platform setting to SQLite: %s", e)

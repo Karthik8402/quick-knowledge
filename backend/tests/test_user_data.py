@@ -92,6 +92,59 @@ class TestUserSessions:
             set_vector_store(None)
             set_embeddings(None)
 
+    def test_sessions_database_failure_fallback(self, tmp_registry, mock_vector_store):
+        """When AUTH_ENABLED=true and DB connection fails, /user/sessions returns fallback current session."""
+        os.environ["AUTH_ENABLED"] = "true"
+        try:
+            from app.config import get_settings
+
+            get_settings.cache_clear()
+
+            with patch(
+                "app.api.v1.endpoints.user_data.get_supabase_db_conn",
+                side_effect=Exception("DB Connection failed"),
+            ):
+                from app.dependencies import get_registry, set_embeddings, set_vector_store
+
+                set_vector_store(mock_vector_store)
+                set_embeddings(MagicMock())
+                app.dependency_overrides[get_registry] = lambda: tmp_registry
+
+                from app.core.auth import UserContext, get_current_user
+
+                dummy_user = UserContext(
+                    user_id="user-123",
+                    email="user@example.com",
+                    role="user",
+                    session_id="my-session-id",
+                )
+                app.dependency_overrides[get_current_user] = lambda: dummy_user
+
+                client = TestClient(app, raise_server_exceptions=False)
+                resp = client.get(
+                    "/user/sessions",
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"
+                    },
+                )
+                assert resp.status_code == 200
+                data = resp.json()
+                assert "sessions" in data
+                assert len(data["sessions"]) == 1
+                sess = data["sessions"][0]
+                assert sess["session_id"] == "my-session-id"
+                assert sess["is_current"] is True
+                assert "note" in data
+                assert "temporarily unavailable" in data["note"]
+        finally:
+            os.environ["AUTH_ENABLED"] = "false"
+            from app.config import get_settings
+
+            get_settings.cache_clear()
+            app.dependency_overrides.clear()
+            set_vector_store(None)
+            set_embeddings(None)
+
 
 # ---------------------------------------------------------------------------
 # Notifications Tests
@@ -162,3 +215,43 @@ class TestUserNotifications:
             assert resp.status_code == 200
             data = resp.json()
             assert "notifications" in data
+
+    def test_notifications_with_documents(self, test_client: TestClient, tmp_registry):
+        """Test notifications when documents are present in the registry."""
+        tmp_registry.upsert(
+            {
+                "document_id": "doc-789",
+                "file_name": "research_paper.pdf",
+                "owner_id": "anonymous",
+                "created_at": "2026-06-22T10:00:00Z",
+                "chunks": 42,
+                "content_hash": "hash123",
+                "pages": 5,
+                "source_type": "upload",
+            }
+        )
+
+        resp = test_client.get("/user/notifications")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "notifications" in data
+        notifs = data["notifications"]
+
+        # 1. Onboarding upload and welcome notifications should NOT be present
+        assert not any(n["id"] == "onboarding-upload" for n in notifs)
+        assert not any(n["id"] == "welcome" for n in notifs)
+
+        # 2. Document indexed notification should be present
+        doc_notif = next((n for n in notifs if n["id"] == "doc-indexed-doc-789"), None)
+        assert doc_notif is not None
+        assert "research_paper.pdf" in doc_notif["body"]
+        assert doc_notif["type"] == "info"
+        assert doc_notif["action"]["label"] == "Search Document"
+
+        # 3. Platform update notification should be present
+        update_notif = next((n for n in notifs if n["id"] == "platform-update-v3"), None)
+        assert update_notif is not None
+
+        # 4. Pro Tip: Tuning Search Relevance should be present
+        tip_notif = next((n for n in notifs if n["id"] == "tip-rag-tuning"), None)
+        assert tip_notif is not None

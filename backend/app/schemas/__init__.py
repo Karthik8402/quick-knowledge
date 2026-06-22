@@ -151,3 +151,4 @@ class HealthResponse(BaseModel):
     """Response body for GET /health."""
 
     status: str
+    git_commit: str | None = None

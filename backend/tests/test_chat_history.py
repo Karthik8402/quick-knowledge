@@ -17,6 +17,7 @@ class TestChatHistoryService:
         original_db_path = settings.sqlite_db_path
         settings.sqlite_db_path = str(db_path)
 
+        conn = None
         try:
             # Invoking _get_sqlite_conn should create the file and the table
             conn = ChatHistoryService._get_sqlite_conn()
@@ -27,8 +28,9 @@ class TestChatHistoryService:
             row = cursor.fetchone()
             assert row is not None
             assert row[0] == "chat_sessions"
-            conn.close()
         finally:
+            if conn:
+                conn.close()
             settings.sqlite_db_path = original_db_path
 
     def test_save_and_load_turns_sqlite(self, tmp_path):
